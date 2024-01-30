@@ -5,6 +5,8 @@ from sklearn.model_selection import train_test_split
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.naive_bayes import MultinomialNB
 from sklearn.metrics import accuracy_score, classification_report
+import altair as alt
+
 
 # Display the GIF image using st.image
 st.image("/Users/mdabusufian/Downloads/Neuroapp_sufi/activation.gif", use_column_width=True)
