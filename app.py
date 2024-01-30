@@ -65,8 +65,8 @@ if df is not None and not df.empty:
         
     if 'text' in df.columns and 'label' in df.columns:
         # Split the data into training and testing sets
-        X = df['text']
-        y = df['label']
+        X = df['Statement']
+        y = df['Truth Value']
         X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
 
         # Define and train tfidf_vectorizer
