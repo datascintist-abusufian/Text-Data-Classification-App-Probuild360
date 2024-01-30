@@ -18,7 +18,7 @@ st.sidebar.header("Upload Your Data")
 st.sidebar.write("Upload a CSV file for data analysis.")
 
 # File uploader in the sidebar
-    uploaded_file = st.sidebar.file_uploader("Choose a CSV file", type="csv")
+uploaded_file = st.sidebar.file_uploader("Choose a CSV file", type="csv")
 
 if uploaded_file is not None:
         # Process the uploaded file
