@@ -58,24 +58,21 @@ if uploaded_file is not None:
             # Define the class labels
             class_labels = ["true", "false", "mostly-true", "half-true", "pants-fire", "mostly-false"]
             
-            # Add a selection box for class labels
+            # Section for Random Prediction
             st.title("Class Prediction")
-            selected_class = st.selectbox("Select a class for prediction", class_labels, key='class_selection')
+            selected_class = st.selectbox("Select a class for random prediction", class_labels, key='class_selection')
             
-            # Button to generate random prediction
             if st.button("Show Random Prediction", key='random_prediction_button'):
                 if selected_class:
-                    # Generate random prediction based on the selected class
                     random_prediction = df[df['label'] == selected_class].sample(n=1)['text'].values[0]
                     st.write(f"Random '{selected_class}' statement: {random_prediction}")
                 else:
                     st.error("Please select a class first.")
 
-            # User input for text classification
+            # Section for User Input Prediction
             st.subheader("Try the Classifier")
-            text_input = st.text_input("Enter text for classification:")
+            text_input = st.text_input("Enter text for classification prediction:")
             if text_input:
-                # Predict the class of the entered text
                 text_input_tfidf = tfidf_vectorizer.transform([text_input])
                 prediction = classifier.predict(text_input_tfidf)
                 st.write("Prediction Result:")
