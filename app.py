@@ -74,7 +74,7 @@ if df is not None and not df.empty:
 
         # Display accuracy and classification report
         accuracy = accuracy_score(y_test, y_pred)
-        st.write(f"Accuracy: {accuracy:.2f}")
+        st.write(f"Model Accuracy: {accuracy:.2f}")
         st.write("Classification Report:")
         st.write(classification_report(y_test, y_pred))
 
