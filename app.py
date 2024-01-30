@@ -13,6 +13,27 @@ st.image("activation.gif", use_column_width=True)
 st.title("Text Data Classification App-Probuild360")
 st.write("This app demonstrates text classification into different classes using Streamlit.")
 
+# Sidebar for file upload
+    st.sidebar.header("Upload Your Data")
+    st.sidebar.write("Upload a CSV file for data analysis.")
+
+    # File uploader in the sidebar
+    uploaded_file = st.sidebar.file_uploader("Choose a CSV file", type="csv")
+
+if uploaded_file is not None:
+        # Process the uploaded file
+        df_uploaded = pd.read_csv(uploaded_file)
+        st.sidebar.write("Uploaded Data:")
+        st.sidebar.dataframe(df_uploaded.head())
+
+  # Existing functionality for loading data from GitHub
+    st.sidebar.header("Or Use Example Dataset")
+    if st.sidebar.button("Load Example Data"):
+        df_example = load_data_from_github()
+        if df_example is not None:
+            st.write("Example Data:")
+            st.dataframe(df_example.head())
+
 # Load data from GitHub repository
 @st.cache
 def load_data_from_github():
