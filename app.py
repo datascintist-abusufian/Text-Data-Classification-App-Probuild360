@@ -58,17 +58,17 @@ if uploaded_file is not None:
             # Define the class labels
             class_labels = ["true", "false", "mostly-true", "half-true", "pants-fire", "mostly-false"]
             
-            # Section for Random Prediction
-            st.title("Class Prediction")
-            selected_class = st.selectbox("Select a class for random prediction", class_labels, key='class_selection')
-            
-            if st.button("Show Random Prediction", key='random_prediction_button'):
-                if selected_class:
-                    random_prediction = df[df['label'] == selected_class].sample(n=1)['text'].values[0]
-                    st.write(f"Random '{selected_class}' text: {random_prediction}")
+         
+            # Section for Displaying Random Texts from Each Class
+            st.title("Explore Texts from Different Classes")
+            selected_class = st.selectbox("Select a class to see a random text", class_labels)
+
+            if st.button("Show Random Text"):
+            random_text = df[df['label'] == selected_class].sample(n=1)['text'].iloc[0]
+            st.write(f"Random text from '{selected_class}': {random_text}")
                 else:
                     st.error("Please select a class first.")
-
+                    
             # Section for User Input Prediction
             st.subheader("Try the Classifier")
             text_input = st.text_input("Enter text for classification prediction:")
