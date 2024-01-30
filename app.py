@@ -12,7 +12,7 @@ import altair as alt
 st.image("activation.gif", use_column_width=True)
 
 # Title and description
-st.title("Text Data Classification App for Probuild360")
+st.title("Text Data Classification App-Probuild360")
 st.write("This app demonstrates text classification into different classes using Streamlit.")
 
 # Function to load data
