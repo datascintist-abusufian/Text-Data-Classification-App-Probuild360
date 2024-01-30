@@ -33,6 +33,9 @@ if st.sidebar.button("Load Example Data"):
         if df_example is not None:
             st.write("Example Data:")
             st.dataframe(df_example.head())
+                
+# At the beginning of your Streamlit app, to clear the cache
+st.cache.clear()
 
 # Load data from GitHub repository
 @st.cache
@@ -84,7 +87,7 @@ if df is not None and not df.empty:
         # Section for Class Selection and Displaying Random Texts
         st.title("Class Selection and Random Texts")
         selected_class = st.selectbox("Select a class to see a random text", class_labels)
-
+            
         if st.button("Show Random Text"):
             random_text = df[df['label'] == selected_class].sample(n=1)['text'].iloc[0]
             st.write(f"Random text from '{selected_class}': {random_text}")
