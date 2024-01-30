@@ -7,7 +7,7 @@ from sklearn.naive_bayes import MultinomialNB
 from sklearn.metrics import accuracy_score, classification_report
 
 # Display the GIF image using st.image
-st.image("activation.gif", width=600)
+st.image("activation.gif", use_column_width=True)
 
 # Title and description
 st.title("Text Data Classification App-Probuild360")
