@@ -107,4 +107,4 @@ if df is not None and not df.empty:
             st.write("Prediction Result:")
             st.success(f"The predicted class for the entered text is: {prediction[0]}")
 else:
-    st.error("Failed to load data. Please check the dataset URL or format.")
+    st.error("Failed to load data. Please check the dataset URL or format")
