@@ -34,10 +34,6 @@ if st.sidebar.button("Load Example Data"):
             st.write("Example Data:")
             st.dataframe(df_example.head())
                 
-# At the beginning of your Streamlit app, to clear the cache
-# Clear the cache
-st.legacy_caching.clear_cache()
-
 # Load data from GitHub repository
 @st.cache
 def load_data_from_github():
