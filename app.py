@@ -13,10 +13,11 @@ st.image("activation.gif", use_column_width=True)
 st.title("Text Data Classification App-Probuild360")
 st.write("This app demonstrates text classification into different classes using Streamlit.")
 # Sidebar for file upload
-    st.sidebar.header("Upload Your Data")
-    st.sidebar.write("Upload a CSV file for data analysis.")
 
-    # File uploader in the sidebar
+st.sidebar.header("Upload Your Data")
+st.sidebar.write("Upload a CSV file for data analysis.")
+
+# File uploader in the sidebar
     uploaded_file = st.sidebar.file_uploader("Choose a CSV file", type="csv")
 
 if uploaded_file is not None:
