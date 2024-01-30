@@ -65,7 +65,7 @@ if uploaded_file is not None:
             if st.button("Show Random Prediction", key='random_prediction_button'):
                 if selected_class:
                     random_prediction = df[df['label'] == selected_class].sample(n=1)['text'].values[0]
-                    st.write(f"Random '{selected_class}' statement: {random_prediction}")
+                    st.write(f"Random '{selected_class}' text: {random_prediction}")
                 else:
                     st.error("Please select a class first.")
 
