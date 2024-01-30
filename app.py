@@ -63,7 +63,7 @@ if df is not None and not df.empty:
         st.write("First five rows of the loaded dataset:")
         st.write(df.head())
         
-    if 'text' in df.columns and 'label' in df.columns:
+    if 'Statement' in df.columns and 'Truth Value' in df.columns:
         # Split the data into training and testing sets
         X = df['Statement']
         y = df['Truth Value']
