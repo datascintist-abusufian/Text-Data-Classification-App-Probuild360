@@ -9,7 +9,7 @@ import altair as alt
 
 
 # Display the GIF image using st.image
-st.image("/Users/mdabusufian/Downloads/Neuroapp_sufi/activation.gif", use_column_width=True)
+st.image("activation.gif", use_column_width=True)
 
 # Title and description
 st.title("Text Data Classification App for Probuild360")
