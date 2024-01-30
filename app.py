@@ -22,9 +22,11 @@ def load_data_from_github():
         df.dropna(inplace=True)
         return df
     except pd.errors.ParserError as e:
-        st.error(f"An error occurred while parsing the CSV file: {e}")
-        return None
-        
+        st.error(f"Parser Error: {e}")
+    except Exception as e:
+        st.error(f"An error occurred: {e}")
+    return None
+
 # Load the dataset
 df = load_data_from_github()
 
