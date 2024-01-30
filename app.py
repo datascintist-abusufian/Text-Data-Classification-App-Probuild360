@@ -18,14 +18,15 @@ st.write("This app demonstrates text classification into different classes using
 def load_data_from_github():
     url = 'https://raw.githubusercontent.com/datascintist-abusufian/Text-Data-Classification-App-for-Probuild360/main/test.csv'
     try:
-        df = pd.read_csv(url, error_bad_lines=False)
+        df = pd.read_csv(url)
         df.dropna(inplace=True)
         return df
     except pd.errors.ParserError as e:
         st.error(f"Parser Error: {e}")
+        return None
     except Exception as e:
-        st.error(f"An error occurred: {e}")
-    return None
+        st.error(f"An error occurred while loading the data: {e}")
+        return None
 
 # Load the dataset
 df = load_data_from_github()
