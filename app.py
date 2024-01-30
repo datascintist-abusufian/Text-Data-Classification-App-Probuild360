@@ -37,7 +37,7 @@ if st.sidebar.button("Load Example Data"):
 # Load data from GitHub repository
 @st.cache
 def load_data_from_github():
-    url = 'https://raw.githubusercontent.com/datascintist-abusufian/Text-Data-Classification-App-for-Probuild360/main/test.csv'
+    url = 'https://github.com/datascintist-abusufian/Text-Data-Classification-App-for-Probuild360/blob/main/test.csv'
     try:
         df = pd.read_csv(url)
         df.dropna(inplace=True)
