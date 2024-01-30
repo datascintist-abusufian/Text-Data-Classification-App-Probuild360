@@ -64,8 +64,8 @@ if uploaded_file is not None:
             selected_class = st.selectbox("Select a class to see a random text", class_labels)
 
             if st.button("Show Random Text"):
-            random_text = df[df['label'] == selected_class].sample(n=1)['text'].iloc[0]
-            st.write(f"Random text from '{selected_class}': {random_text}")
+                random_text = df[df['label'] == selected_class].sample(n=1)['text'].iloc[0]
+                st.write(f"Random text from '{selected_class}': {random_text}")
                 else:
                     st.error("Please select a class first.")
                     
