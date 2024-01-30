@@ -28,7 +28,7 @@ if uploaded_file is not None:
 
 # Existing functionality for loading data from GitHub
 st.sidebar.header("Or Use Example Dataset")
-    if st.sidebar.button("Load Example Data"):
+if st.sidebar.button("Load Example Data"):
         df_example = load_data_from_github()
         if df_example is not None:
             st.write("Example Data:")
