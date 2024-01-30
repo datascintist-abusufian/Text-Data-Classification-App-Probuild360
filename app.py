@@ -7,7 +7,6 @@ from sklearn.naive_bayes import MultinomialNB
 from sklearn.metrics import accuracy_score, classification_report
 import altair as alt
 
-
 # Display the GIF image using st.image
 st.image("activation.gif", use_column_width=True)
 
@@ -62,39 +61,24 @@ if uploaded_file is not None:
             
             # Add a selection box for class labels
             st.title("Class Prediction")
-            selected_class = st.selectbox("Select a class for prediction", class_labels)
-            st.write(f"You have selected: {selected_class}")
+            selected_class = st.selectbox("Select a class for prediction", class_labels, key='class_selection')
             
+            # Button to generate random prediction
+            if st.button("Show Random Prediction", key='random_prediction_button'):
+                if selected_class:
+                    # Generate random prediction based on the selected class
+                    random_prediction = df[df['label'] == selected_class].sample(n=1)['text'].values[0]
+                    st.write(f"Random '{selected_class}' statement: {random_prediction}")
+                else:
+                    st.error("Please select a class first.")
+
             # User input for text classification
             st.subheader("Try the Classifier")
-            st.write("Select a class and see a random prediction:")
-            
-            # Selection box for class labels
-            selected_class = st.selectbox("Select a class for prediction", class_labels)
-            
-       # Button to generate random prediction
-if st.button("Show Random Prediction"):
-    if selected_class:
-        # This is a placeholder for generating a random prediction.
-        # You should replace this with your model's prediction logic if available.
-        # For now, it randomly picks a statement from the selected class.
-        random_prediction = df[df['label'] == selected_class].sample(n=1)['text'].values[0]
-        st.write(f"Random '{selected_class}' statement: {random_prediction}")
-    else:
-        st.error("Please select a class first.")
-
-        
-        
-        text_input = st.text_input("Enter text for classification:")
-            
-        if text_input:
-                # Transform the input text using the TF-IDF vectorizer
+            text_input = st.text_input("Enter text for classification:")
+            if text_input:
+                # Predict the class of the entered text
                 text_input_tfidf = tfidf_vectorizer.transform([text_input])
-
-                # Predict the class
                 prediction = classifier.predict(text_input_tfidf)
-
-                # Display the prediction
                 st.write("Prediction Result:")
                 st.success(f"The predicted class for the entered text is: {prediction[0]}")
 else:
