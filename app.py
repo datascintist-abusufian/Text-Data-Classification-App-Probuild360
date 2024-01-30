@@ -12,7 +12,6 @@ st.image("activation.gif", use_column_width=True)
 # Title and description
 st.title("Text Data Classification App-Probuild360")
 st.write("This app demonstrates text classification into different classes using Streamlit.")
-
 # Sidebar for file upload
     st.sidebar.header("Upload Your Data")
     st.sidebar.write("Upload a CSV file for data analysis.")
