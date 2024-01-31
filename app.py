@@ -13,6 +13,17 @@ st.image("activation.gif", use_column_width=True)
 st.title("Text Data Classification App-Probuild360")
 st.write("This app demonstrates text classification into different classes using Streamlit.")
 st.markdown("<span style='color:blue'>Author Md Abu Sufian</span>", unsafe_allow_html=True)
+st.markdown(
+    """
+    <div style='color: red;'>
+        <strong>Important Note:</strong> The accuracy score is based on an analysis using test data, 
+        which is a subset typically used to evaluate the model's predictions and not for training. 
+        Therefore, the scores may not reflect the model's potential accuracy with a fully trained dataset.
+    </div>
+    """, 
+    unsafe_allow_html=True
+)
+
 # Sidebar for file upload
 
 st.sidebar.header("Upload Your Data")
