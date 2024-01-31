@@ -43,7 +43,12 @@ if st.sidebar.button("Load Example Data"):
         if df_example is not None:
             st.write("Example Data:")
             st.dataframe(df_example.head())
-                
+            
+# Add a button in the Streamlit sidebar to clear the cache
+if st.sidebar.button('Clear Cache'):
+    st.legacy_caching.clear_cache()
+    st.sidebar.success("Cache is cleared!")
+    
 @st.cache(show_spinner=False)
 def load_data_from_github():
     url = 'https://raw.githubusercontent.com/datascintist-abusufian/Text-Data-Classification-App-for-Probuild360/main/test.csv'
