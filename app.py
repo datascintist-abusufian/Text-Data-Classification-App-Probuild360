@@ -92,7 +92,7 @@ if df is not None and not df.empty:
         selected_class = st.selectbox("Select a class to see a random text", class_labels)
             
         if st.button("Show Random Text"):
-            random_text = df[df['label'] == selected_class].sample(n=1)['text'].iloc[0]
+            random_text = df[df['Truth Value'] == selected_class].sample(n=1)['Statement'].iloc[0]
             st.write(f"Random text from '{selected_class}': {random_text}")
 
         # Section for User Input Prediction
