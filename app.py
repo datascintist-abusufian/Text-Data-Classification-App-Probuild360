@@ -34,17 +34,18 @@ if st.sidebar.button("Load Example Data"):
             st.write("Example Data:")
             st.dataframe(df_example.head())
                 
-# Load data from GitHub repository
-@st.cache
+@st.cache(show_spinner=False)
 def load_data_from_github():
     url = 'https://raw.githubusercontent.com/datascintist-abusufian/Text-Data-Classification-App-for-Probuild360/main/test.csv'
+    st.write("Loading data from:", url)  # Debug print
     try:
         df = pd.read_csv(url)
-        df.dropna(inplace=True)
+        # Debug print
+        st.write("Data loaded successfully. Here's a preview:")
+        st.write(df.head())
+        # Selective dropna
+        df = df.dropna(subset=['Statement', 'Truth Value'])
         return df
-    except pd.errors.ParserError as e:
-        st.error(f"Parser Error: {e}")
-        return None
     except Exception as e:
         st.error(f"An error occurred while loading the data: {e}")
         return None
