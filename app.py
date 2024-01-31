@@ -51,7 +51,7 @@ if st.sidebar.button('Clear Cache'):
     st.legacy_caching.clear_cache()
     st.sidebar.success("Cache is cleared!")
     
-@st.cache(show_spinner=False)
+@st.legacy_caching.clear_cache()
 def load_data_from_github():
     url = 'https://raw.githubusercontent.com/datascintist-abusufian/Text-Data-Classification-App-for-Probuild360/main/test.csv'
     st.write("Loading data from:", url)  # Debug print
