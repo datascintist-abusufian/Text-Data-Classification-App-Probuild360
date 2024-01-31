@@ -15,7 +15,7 @@ st.write("This app demonstrates text classification into different classes using
 st.markdown("<span style='color:blue'>Author Md Abu Sufian</span>", unsafe_allow_html=True)
 st.markdown(
     """
-    <div style='color: red;'>
+    <div style='color: green;'>
         <strong>Important Note:</strong> The accuracy score is based on an analysis using test data, 
         which is a subset typically used to evaluate the model's predictions and not for training. 
         Therefore, the scores may not reflect the model's potential accuracy with a fully trained dataset.
