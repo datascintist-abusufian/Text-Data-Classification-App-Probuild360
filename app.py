@@ -95,6 +95,9 @@ if df is not None and not df.empty:
         # Make predictions on the test data
         y_pred = classifier.predict(X_test_tfidf)
 
+        # Display the GIF image using st.image
+        st.image("PCA_GIF.gif",use_column_width=True)
+
         # Display accuracy and classification report
         accuracy = accuracy_score(y_test, y_pred)
         st.write(f"Model Accuracy: {accuracy:.2f}")
