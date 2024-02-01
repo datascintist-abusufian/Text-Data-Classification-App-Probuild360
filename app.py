@@ -6,6 +6,25 @@ from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.naive_bayes import MultinomialNB
 from sklearn.metrics import accuracy_score, classification_report
 
+# Data loading function with caching
+@st.cache(suppress_st_warning=True)  # Allow st.write within the cached function
+def load_data_from_github():
+    url = 'https://raw.githubusercontent.com/datascintist-abusufian/Text-Data-Classification-App-for-Probuild360/main/test.csv'
+    st.write("Loading data from:", url)  # Debug print
+    try:
+        df = pd.read_csv(url)
+        st.write("Data loaded successfully. Here's a preview:")  # Debug print
+        st.write(df.head())
+        df = df.dropna(subset=['Statement', 'Truth Value'])
+        return df
+    except Exception as e:
+        st.error(f"An error occurred while loading the data: {e}")
+        return pd.DataFrame()
+
+# Cache clearing button
+if st.sidebar.button('Clear Cache'):
+    st.legacy_caching.clear_cache()
+
 # Display the GIF image using st.image
 st.image("PCA_GIF.gif",use_column_width=True)
 
@@ -50,22 +69,6 @@ if st.sidebar.button("Load Example Data"):
 if st.sidebar.button('Clear Cache'):
     st.legacy_caching.clear_cache()
     st.sidebar.success("Cache is cleared!")
-    
-@st.legacy_caching.clear_cache()
-def load_data_from_github():
-    url = 'https://raw.githubusercontent.com/datascintist-abusufian/Text-Data-Classification-App-for-Probuild360/main/test.csv'
-    st.write("Loading data from:", url)  # Debug print
-    try:
-        df = pd.read_csv(url)
-        # Debug print
-        st.write("Data loaded successfully. Here's a preview:")
-        st.write(df.head())
-        # Selective dropna
-        df = df.dropna(subset=['Statement', 'Truth Value'])
-        return df
-    except Exception as e:
-        st.error(f"An error occurred while loading the data: {e}")
-        return None
 
 # Load the dataset
 df = load_data_from_github()
