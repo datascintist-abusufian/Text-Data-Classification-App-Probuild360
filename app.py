@@ -105,14 +105,21 @@ if df is not None and not df.empty:
 
         # Define the class labels
         class_labels = ["true", "false", "mostly-true", "half-true", "pants-fire", "mostly-false"]
-
         # Section for Class Selection and Displaying Random Texts
         st.title("Class Selection and Random Texts")
         selected_class = st.selectbox("Select a class to see a random text", class_labels)
-            
+
         if st.button("Show Random Text"):
-            random_text = df[df['Truth Value'] == selected_class].sample(n=1)['Statement'].iloc[0]
-            st.write(f"Random text from '{selected_class}': {random_text}")
+        # Filter the DataFrame based on the selected class
+            filtered_df = df[df['Truth Value'] == selected_class]
+    
+        # Check if the filtered DataFrame is empty
+        if not filtered_df.empty:
+        random_text = filtered_df.sample(n=1)['Statement'].iloc[0]
+        st.write(f"Random text from '{selected_class}': {random_text}")
+        else:
+        st.write(f"No texts found for the selected class '{selected_class}'.")
+
 
         # Section for User Input Prediction
         st.subheader("Text Classification Prediction")
