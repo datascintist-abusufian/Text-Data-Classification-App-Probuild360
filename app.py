@@ -40,8 +40,7 @@ st.markdown(
         Therefore, the scores may not reflect the model's potential accuracy with a fully trained dataset.
     </div>
     """, 
-    unsafe_allow_html=True
-)
+    unsafe_allow_html=True)
 
 # Sidebar for file upload
 
