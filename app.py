@@ -21,10 +21,6 @@ def load_data_from_github():
         st.error(f"An error occurred while loading the data: {e}")
         return pd.DataFrame()
 
-# Cache clearing button
-if st.sidebar.button('Clear Cache'):
-    st.legacy_caching.clear_cache()
-
 # Display the GIF image using st.image
 st.image("PCA_GIF.gif",use_column_width=True)
 
