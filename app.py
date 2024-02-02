@@ -21,8 +21,15 @@ def load_data_from_github():
         st.error(f"An error occurred while loading the data: {e}")
         return pd.DataFrame()
 
-# Display the GIF image using st.image
-st.image("PCA_GIF.gif",use_column_width=True)
+# Initialize session state variables
+if 'load_example' not in st.session_state:
+    st.session_state['load_example'] = False
+
+if 'data_uploaded' not in st.session_state:
+    st.session_state['data_uploaded'] = False
+
+# Display the GIF, Title, and Description...
+st.image("PCA_GIF.gif", use_column_width=True)
 
 # Title and description
 st.title("Text Data Classification App-Probuild360")
@@ -39,26 +46,26 @@ st.markdown(
     unsafe_allow_html=True)
 
 # Sidebar for file upload
-
 st.sidebar.header("Upload Your Data")
-st.sidebar.write("Upload a CSV file for data analysis.")
-
-# File uploader in the sidebar
 uploaded_file = st.sidebar.file_uploader("Choose a CSV file", type="csv")
 
 if uploaded_file is not None:
-        # Process the uploaded file
-        df_uploaded = pd.read_csv(uploaded_file)
-        st.sidebar.write("Uploaded Data:")
-        st.sidebar.dataframe(df_uploaded.head())
+    st.session_state['data_uploaded'] = True
+    st.session_state['load_example'] = False
+    df_uploaded = pd.read_csv(uploaded_file)
+    st.sidebar.write("Uploaded Data:")
+    st.sidebar.dataframe(df_uploaded.head())
 
-# Existing functionality for loading data from GitHub
-st.sidebar.header("Or Use Example Dataset")
 if st.sidebar.button("Load Example Data"):
-        df_example = load_data_from_github()
-        if df_example is not None:
-            st.write("Example Data:")
-            st.dataframe(df_example.head())
+    st.session_state['load_example'] = True
+    st.session_state['data_uploaded'] = False
+
+# Decision logic for displaying data based on user interaction
+if st.session_state['load_example']:
+    df_example = load_data_from_github()
+    if df_example is not None and not df_example.empty:
+        st.write("Example Data:")
+        st.dataframe(df_example.head())
             
 # Add a button in the Streamlit sidebar to clear the cache
 if st.sidebar.button('Clear Cache'):
