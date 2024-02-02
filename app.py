@@ -14,7 +14,7 @@ def load_data_from_github():
     try:
         df = pd.read_csv(url)
         #st.write("Data loaded successfully. Here's a preview:")  # Debug print
-        st.write(df.head())
+        #st.write(df.head())
         df = df.dropna(subset=['Statement', 'Truth Value'])
         return df
     except Exception as e:
