@@ -7,7 +7,7 @@ from sklearn.naive_bayes import MultinomialNB
 from sklearn.metrics import accuracy_score, classification_report
 
 # Data loading function with caching
-@st.cache(suppress_st_warning=True)  # Allow st.write within the cached function
+@st.caching.clear_cache()  # Allow st.write within the cached function
 def load_data_from_github():
     url = 'https://raw.githubusercontent.com/datascintist-abusufian/Text-Data-Classification-App-for-Probuild360/main/test.csv'
     st.write("Loading data from:", url)  # Debug print
