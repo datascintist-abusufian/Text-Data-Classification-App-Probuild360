@@ -9,7 +9,7 @@ from sklearn.metrics import accuracy_score, classification_report
 # Data loading function with caching
 @st.cache_data # Allow st.write within the cached function
 def load_data_from_github():
-    url = '/Users/mdabusufian/Downloads/Neuroapp_sufi/test.csv'
+    url = 'https://raw.githubusercontent.com/datascintist-abusufian/Text-Data-Classification-App-for-Probuild360/main/test.csv'
     st.write("Loading data from:", url)  # Debug print
     try:
         df = pd.read_csv(url)
