@@ -13,7 +13,7 @@ def load_data_from_github():
     #st.write("Loading data from:", url)  # Debug print
     try:
         df = pd.read_csv(url)
-        st.write("Data loaded successfully. Here's a preview:")  # Debug print
+        #st.write("Data loaded successfully. Here's a preview:")  # Debug print
         st.write(df.head())
         df = df.dropna(subset=['Statement', 'Truth Value'])
         return df
