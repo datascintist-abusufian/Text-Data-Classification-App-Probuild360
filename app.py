@@ -68,7 +68,7 @@ if st.session_state['load_example']:
         st.dataframe(df_example.head())
             
 # Load the dataset
-df, message = load_data_from_github()
+df= load_data_from_github()
 
 # Check if the dataset is loaded
 if df is not None and not df.empty:
