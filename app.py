@@ -29,7 +29,7 @@ if 'data_uploaded' not in st.session_state:
     st.session_state['data_uploaded'] = False
 
 # Display the GIF, Title, and Description...
-st.image("Bayes.gif", use_column_width=True)
+st.image("markov_chain.gif", use_column_width=True)
 
 # Title and description
 st.title("Text Data Classification App-Probuild360")
