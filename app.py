@@ -127,4 +127,4 @@ if text_input:
             st.write("Prediction Result:")
             st.success(f"The predicted class for the entered text is: {prediction[0]}")
 else:
-    st.error(ok)
+    st.error("Failed to load data. Please check the dataset url or format")
