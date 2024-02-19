@@ -77,8 +77,8 @@ if not df.empty:
         st.success(f"The predicted class for the entered text is: {prediction[0]}")
 else:
     st.error("Failed to load or display data. Please check the dataset URL or format.")
-
-except Exception as e:
+    
+    except Exception as e:
     st.error(f"An error occurred while loading the data: {str(e)}")
     return pd.DataFrame()
 
