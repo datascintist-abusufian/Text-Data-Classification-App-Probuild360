@@ -8,7 +8,7 @@ from sklearn.metrics import accuracy_score, classification_report
 # Data loading function with caching
 @st.cache(allow_output_mutation=True)
 def load_data_from_github():
-    url = 'https://raw.githubusercontent.com/datascintist-abusufian/Text-Data-Classification-App-for-Probuild360/main/test.csv'
+    url = 'https://github.com/datascintist-abusufian/Text-Data-Classification-App-Probuild360/blob/main/test.csv'
     try:
         df = pd.read_csv(url)
         df = df.dropna(subset=['Statement', 'Truth Value'])
