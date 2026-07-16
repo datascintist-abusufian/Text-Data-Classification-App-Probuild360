@@ -7,8 +7,6 @@ from sklearn.naive_bayes import MultinomialNB
 from sklearn.metrics import accuracy_score, classification_report, confusion_matrix
 from sklearn.preprocessing import LabelEncoder
 from sklearn.manifold import TSNE
-from sklearn.decomposition import PCA
-from sklearn.cluster import KMeans
 import re
 import nltk
 from nltk.corpus import stopwords
@@ -18,11 +16,18 @@ import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 import warnings
 import base64
-import io
-from wordcloud import WordCloud
-import matplotlib.pyplot as plt
+import os
 from collections import Counter
+import matplotlib.pyplot as plt
 warnings.filterwarnings('ignore')
+
+# Try to import wordcloud, but handle gracefully if not available
+try:
+    from wordcloud import WordCloud
+    WORDCLOUD_AVAILABLE = True
+except ImportError:
+    WORDCLOUD_AVAILABLE = False
+    st.warning("⚠️ WordCloud library not available. Some visualizations will be limited.")
 
 # ============================================================================
 # NLTK DATA DOWNLOAD WITH ERROR HANDLING
@@ -186,8 +191,6 @@ def initialize_session_state():
         st.session_state.model_results = None
     if 'confidence_threshold' not in st.session_state:
         st.session_state.confidence_threshold = 0.5
-    if 'gif_displayed' not in st.session_state:
-        st.session_state.gif_displayed = False
 
 initialize_session_state()
 
@@ -255,7 +258,6 @@ def train_model(df):
             'y_test': y_test,
             'y_pred': y_pred,
             'class_names': label_encoder.classes_,
-            'X_test_tfidf': X_test_tfidf,
             'X_train_tfidf': X_train_tfidf,
             'y_train': y_train
         }
@@ -269,18 +271,8 @@ def train_model(df):
 # ============================================================================
 # GIF DISPLAY FUNCTION
 # ============================================================================
-def get_base64_gif(gif_path):
-    """Convert GIF to base64 for embedding"""
-    try:
-        with open(gif_path, 'rb') as f:
-            gif_bytes = f.read()
-        return base64.b64encode(gif_bytes).decode('utf-8')
-    except:
-        return None
-
 def display_gif():
     """Display the Markov chain GIF"""
-    # Try different possible locations
     gif_paths = [
         "markov_chain.gif",
         "images/markov_chain.gif",
@@ -290,8 +282,10 @@ def display_gif():
     
     for path in gif_paths:
         if os.path.exists(path):
-            gif_base64 = get_base64_gif(path)
-            if gif_base64:
+            try:
+                with open(path, 'rb') as f:
+                    gif_bytes = f.read()
+                gif_base64 = base64.b64encode(gif_bytes).decode('utf-8')
                 st.markdown(f"""
                 <div style="text-align: center; margin: 1rem 0;">
                     <img src="data:image/gif;base64,{gif_base64}" 
@@ -300,8 +294,9 @@ def display_gif():
                 </div>
                 """, unsafe_allow_html=True)
                 return True
+            except:
+                continue
     
-    # If no GIF found, display a placeholder
     st.info("""
     💡 **Markov Chain Animation**  
     A Markov chain is a stochastic model describing a sequence of possible events 
@@ -320,36 +315,33 @@ def create_class_distribution(df):
             
         class_counts = df['Truth Value'].value_counts()
         
-        fig = make_subplots(
-            rows=1, cols=2,
-            subplot_titles=['Class Distribution (Bar)', 'Class Distribution (Pie)'],
-            specs=[[{"type": "bar"}, {"type": "pie"}]]
+        # Create separate figures for bar and pie
+        fig_bar = px.bar(
+            x=class_counts.index,
+            y=class_counts.values,
+            title='Class Distribution (Bar)',
+            labels={'x': 'Class', 'y': 'Count'},
+            color=class_counts.index,
+            color_discrete_sequence=px.colors.qualitative.Set2
+        )
+        fig_bar.update_layout(showlegend=False)
+        
+        fig_pie = px.pie(
+            values=class_counts.values,
+            names=class_counts.index,
+            title='Class Distribution (Pie)',
+            hole=0.3,
+            color_discrete_sequence=px.colors.qualitative.Set2
         )
         
-        fig.add_trace(
-            go.Bar(
-                x=class_counts.index,
-                y=class_counts.values,
-                marker_color='#667eea',
-                text=class_counts.values,
-                textposition='auto',
-                name='Count'
-            ),
-            row=1, col=1
-        )
+        # Display both charts side by side
+        col1, col2 = st.columns(2)
+        with col1:
+            st.plotly_chart(fig_bar, use_container_width=True)
+        with col2:
+            st.plotly_chart(fig_pie, use_container_width=True)
         
-        fig.add_trace(
-            go.Pie(
-                labels=class_counts.index,
-                values=class_counts.values,
-                hole=0.3,
-                name='Distribution'
-            ),
-            row=1, col=2
-        )
-        
-        fig.update_layout(height=450, showlegend=False)
-        return fig
+        return True
         
     except Exception as e:
         st.warning(f"Could not create distribution chart: {str(e)}")
@@ -361,7 +353,6 @@ def create_spider_chart(model_results):
         if not model_results:
             return None
         
-        # Calculate metrics for each class
         report = classification_report(
             model_results['y_test'],
             model_results['y_pred'],
@@ -369,7 +360,6 @@ def create_spider_chart(model_results):
             output_dict=True
         )
         
-        # Prepare data for radar chart
         categories = ['Precision', 'Recall', 'F1-Score']
         
         fig = go.Figure()
@@ -436,6 +426,9 @@ def create_confusion_matrix(y_test, y_pred, class_names):
 
 def create_word_cloud(df, class_name=None):
     """Create word cloud for text data"""
+    if not WORDCLOUD_AVAILABLE:
+        return None
+        
     try:
         if class_name:
             texts = df[df['Truth Value'] == class_name]['Statement'].tolist()
@@ -449,7 +442,6 @@ def create_word_cloud(df, class_name=None):
         
         text = ' '.join(texts)
         
-        # Generate word cloud
         wordcloud = WordCloud(
             width=800,
             height=400,
@@ -458,7 +450,6 @@ def create_word_cloud(df, class_name=None):
             max_words=100
         ).generate(text)
         
-        # Convert to image
         fig, ax = plt.subplots(figsize=(10, 5))
         ax.imshow(wordcloud, interpolation='bilinear')
         ax.axis('off')
@@ -475,36 +466,33 @@ def create_text_length_distribution(df):
     try:
         df['text_length'] = df['Statement'].apply(len)
         
-        fig = make_subplots(
-            rows=1, cols=2,
-            subplot_titles=['Text Length Distribution', 'Length by Class']
+        # Create separate charts
+        fig_hist = px.histogram(
+            df,
+            x='text_length',
+            nbins=30,
+            title='Text Length Distribution',
+            labels={'text_length': 'Text Length'},
+            color_discrete_sequence=['#667eea']
         )
         
-        # Overall distribution
-        fig.add_trace(
-            go.Histogram(
-                x=df['text_length'],
-                nbinsx=30,
-                marker_color='#667eea',
-                name='All Texts'
-            ),
-            row=1, col=1
+        fig_box = px.box(
+            df,
+            x='Truth Value',
+            y='text_length',
+            title='Length by Class',
+            labels={'Truth Value': 'Class', 'text_length': 'Text Length'},
+            color='Truth Value',
+            color_discrete_sequence=px.colors.qualitative.Set2
         )
         
-        # Length by class
-        for class_name in df['Truth Value'].unique():
-            class_data = df[df['Truth Value'] == class_name]['text_length']
-            fig.add_trace(
-                go.Box(
-                    y=class_data,
-                    name=class_name,
-                    boxmean='sd'
-                ),
-                row=1, col=2
-            )
+        col1, col2 = st.columns(2)
+        with col1:
+            st.plotly_chart(fig_hist, use_container_width=True)
+        with col2:
+            st.plotly_chart(fig_box, use_container_width=True)
         
-        fig.update_layout(height=400, showlegend=False)
-        return fig
+        return True
         
     except Exception as e:
         st.warning(f"Could not create length distribution: {str(e)}")
@@ -516,15 +504,12 @@ def create_tsne_visualization(model_results):
         if not model_results or 'X_train_tfidf' not in model_results:
             return None
         
-        # Sample data for visualization
-        X = model_results['X_train_tfidf'][:500]  # Limit for performance
+        X = model_results['X_train_tfidf'][:500]
         y = model_results['y_train'][:500]
         
-        # Apply t-SNE
         tsne = TSNE(n_components=2, random_state=42, perplexity=30)
         X_tsne = tsne.fit_transform(X.toarray())
         
-        # Create dataframe
         df_tsne = pd.DataFrame({
             'x': X_tsne[:, 0],
             'y': X_tsne[:, 1],
@@ -585,6 +570,66 @@ def create_top_words_per_class(vectorizer, classifier, label_encoder, top_n=15):
         
     except Exception as e:
         st.warning(f"Could not create top words visualization: {str(e)}")
+        return None
+
+def create_feature_importance(vectorizer, classifier, label_encoder, top_n=20):
+    """Create feature importance visualization"""
+    try:
+        feature_names = vectorizer.get_feature_names_out()
+        log_probs = classifier.feature_log_prob_
+        
+        importance_data = []
+        for i, class_name in enumerate(label_encoder.classes_):
+            importance = np.exp(log_probs[i])
+            top_indices = np.argsort(importance)[-top_n:]
+            
+            for idx in top_indices:
+                importance_data.append({
+                    'Class': class_name,
+                    'Feature': feature_names[idx],
+                    'Importance': importance[idx]
+                })
+        
+        df_importance = pd.DataFrame(importance_data)
+        
+        fig = px.bar(
+            df_importance,
+            x='Feature',
+            y='Importance',
+            color='Class',
+            title=f'Top {top_n} Features by Class',
+            facet_col='Class',
+            facet_col_wrap=2,
+            height=500,
+            color_discrete_sequence=px.colors.qualitative.Set2
+        )
+        
+        fig.update_layout(showlegend=False)
+        return fig
+        
+    except Exception as e:
+        st.warning(f"Could not create feature importance: {str(e)}")
+        return None
+
+def create_prediction_metrics():
+    """Create prediction metrics dashboard"""
+    if not st.session_state.prediction_history:
+        return None
+    
+    try:
+        df_history = pd.DataFrame(st.session_state.prediction_history)
+        class_counts = df_history['prediction'].value_counts()
+        
+        fig = px.pie(
+            values=class_counts.values,
+            names=class_counts.index,
+            title='Prediction Distribution',
+            hole=0.3,
+            color_discrete_sequence=px.colors.qualitative.Set2
+        )
+        
+        return fig
+    except:
         return None
 
 # ============================================================================
@@ -703,33 +748,34 @@ def main():
             st.markdown("### 📊 Data Explorer")
             
             # Class distribution
-            fig_dist = create_class_distribution(df)
-            if fig_dist:
-                st.plotly_chart(fig_dist, use_container_width=True)
-            else:
-                st.info("No data available for visualization")
+            st.markdown("#### Class Distribution")
+            create_class_distribution(df)
             
             # Text length distribution
-            fig_length = create_text_length_distribution(df)
-            if fig_length:
-                st.plotly_chart(fig_length, use_container_width=True)
+            st.markdown("#### Text Length Analysis")
+            create_text_length_distribution(df)
             
             # Word clouds
-            st.markdown("### ☁️ Word Clouds")
-            
-            # Overall word cloud
-            fig_wc = create_word_cloud(df)
-            if fig_wc:
-                st.pyplot(fig_wc)
-            
-            # Word clouds per class
-            st.markdown("#### Word Clouds by Class")
-            cols = st.columns(min(3, len(df['Truth Value'].unique())))
-            for idx, class_name in enumerate(df['Truth Value'].unique()[:3]):
-                with cols[idx % 3]:
-                    fig_wc_class = create_word_cloud(df, class_name)
-                    if fig_wc_class:
-                        st.pyplot(fig_wc_class)
+            if WORDCLOUD_AVAILABLE:
+                st.markdown("### ☁️ Word Clouds")
+                
+                # Overall word cloud
+                fig_wc = create_word_cloud(df)
+                if fig_wc:
+                    st.pyplot(fig_wc)
+                    plt.close()
+                
+                # Word clouds per class
+                st.markdown("#### Word Clouds by Class")
+                cols = st.columns(min(3, len(df['Truth Value'].unique())))
+                for idx, class_name in enumerate(df['Truth Value'].unique()[:3]):
+                    with cols[idx % 3]:
+                        fig_wc_class = create_word_cloud(df, class_name)
+                        if fig_wc_class:
+                            st.pyplot(fig_wc_class)
+                            plt.close()
+            else:
+                st.info("💡 Install wordcloud library for word cloud visualizations")
             
             # Data preview
             st.markdown("### 📋 Data Preview")
@@ -803,7 +849,8 @@ def main():
                                 y='Probability',
                                 color='Class',
                                 title='Prediction Probabilities',
-                                range_y=[0, 1]
+                                range_y=[0, 1],
+                                color_discrete_sequence=px.colors.qualitative.Set2
                             )
                             
                             fig.update_layout(showlegend=False, height=300)
@@ -825,7 +872,6 @@ def main():
                 with col3:
                     st.metric("Classes", len(results['class_names']))
                 with col4:
-                    # Calculate macro F1 score
                     report = classification_report(
                         results['y_test'],
                         results['y_pred'],
@@ -993,7 +1039,6 @@ def main():
                 
                 col1, col2, col3 = st.columns(3)
                 
-                # Character count statistics
                 char_counts = df['Statement'].apply(len)
                 with col1:
                     st.metric("Average Length", f"{char_counts.mean():.1f} chars")
@@ -1044,7 +1089,6 @@ def main():
                 # Co-occurrence analysis
                 st.markdown("#### 🔗 Word Co-occurrence")
                 
-                # Simple co-occurrence analysis for top words
                 top_words = [word for word, _ in word_counts.most_common(10)]
                 co_occurrence = {}
                 
