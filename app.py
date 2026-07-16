@@ -14,6 +14,9 @@ import base64
 import os
 from collections import Counter
 import matplotlib.pyplot as plt
+import plotly.express as px
+import plotly.graph_objects as go
+from plotly.subplots import make_subplots
 warnings.filterwarnings('ignore')
 
 # Try to import wordcloud, but handle gracefully if not available
@@ -40,7 +43,6 @@ st.set_page_config(
 def download_nltk_data():
     """Download required NLTK data with proper error handling"""
     try:
-        # Try to download each resource with error handling
         resources = ['punkt', 'stopwords', 'wordnet', 'omw-1.4']
         
         for resource in resources:
@@ -49,7 +51,6 @@ def download_nltk_data():
             except:
                 pass
         
-        # Try to find the data to verify
         try:
             from nltk.corpus import stopwords
             stopwords.words('english')
@@ -82,23 +83,15 @@ def preprocess_text(text):
         return ""
     
     try:
-        # Basic cleaning
         text = text.lower()
         text = re.sub(r'[^a-zA-Z\s]', '', text)
         text = ' '.join(text.split())
         
-        # Advanced preprocessing if NLTK is available
         if nltk_available:
             try:
-                # Simple tokenization without using punkt_tab
                 tokens = text.split()
-                
-                # Remove stopwords
                 tokens = [token for token in tokens if token not in STOP_WORDS]
-                
-                # Lemmatize
                 tokens = [LEMMATIZER.lemmatize(token) for token in tokens]
-                
                 return ' '.join(tokens)
             except Exception as e:
                 return text
@@ -331,7 +324,6 @@ def create_class_distribution(df):
             
         class_counts = df['Truth Value'].value_counts()
         
-        # Create separate figures for bar and pie
         fig_bar = px.bar(
             x=class_counts.index,
             y=class_counts.values,
@@ -350,7 +342,6 @@ def create_class_distribution(df):
             color_discrete_sequence=px.colors.qualitative.Set2
         )
         
-        # Display both charts side by side
         col1, col2 = st.columns(2)
         with col1:
             st.plotly_chart(fig_bar, use_container_width=True)
@@ -373,7 +364,8 @@ def create_spider_chart(model_results):
             model_results['y_test'],
             model_results['y_pred'],
             target_names=model_results['class_names'],
-            output_dict=True
+            output_dict=True,
+            zero_division=0
         )
         
         categories = ['Precision', 'Recall', 'F1-Score']
@@ -893,7 +885,8 @@ def main():
                         results['y_test'],
                         results['y_pred'],
                         target_names=results['class_names'],
-                        output_dict=True
+                        output_dict=True,
+                        zero_division=0
                     )
                     f1_macro = report['macro avg']['f1-score']
                     st.metric("Macro F1", f"{f1_macro:.3f}")
