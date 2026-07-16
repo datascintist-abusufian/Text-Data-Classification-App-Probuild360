@@ -6,6 +6,9 @@ from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.naive_bayes import MultinomialNB
 from sklearn.metrics import accuracy_score, classification_report, confusion_matrix
 from sklearn.preprocessing import LabelEncoder
+from sklearn.manifold import TSNE
+from sklearn.decomposition import PCA
+from sklearn.cluster import KMeans
 import re
 import nltk
 from nltk.corpus import stopwords
@@ -14,6 +17,11 @@ import plotly.express as px
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 import warnings
+import base64
+import io
+from wordcloud import WordCloud
+import matplotlib.pyplot as plt
+from collections import Counter
 warnings.filterwarnings('ignore')
 
 # ============================================================================
@@ -23,7 +31,6 @@ warnings.filterwarnings('ignore')
 def download_nltk_data():
     """Download required NLTK data with proper error handling"""
     try:
-        # Try to download all required resources
         nltk_resources = ['punkt', 'stopwords', 'wordnet', 'omw-1.4', 'punkt_tab']
         
         for resource in nltk_resources:
@@ -52,25 +59,17 @@ def preprocess_text(text):
         return ""
     
     try:
-        # Basic cleaning
         text = text.lower()
         text = re.sub(r'[^a-zA-Z\s]', '', text)
         text = ' '.join(text.split())
         
-        # Advanced preprocessing if NLTK is available
         if nltk_available:
             try:
-                # Tokenize
                 tokens = nltk.word_tokenize(text)
-                
-                # Remove stopwords
                 stop_words = set(stopwords.words('english'))
                 tokens = [token for token in tokens if token not in stop_words]
-                
-                # Lemmatize
                 lemmatizer = WordNetLemmatizer()
                 tokens = [lemmatizer.lemmatize(token) for token in tokens]
-                
                 return ' '.join(tokens)
             except:
                 return text
@@ -149,6 +148,20 @@ st.markdown("""
         transform: scale(1.02);
         box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
     }
+    .info-box {
+        padding: 1rem;
+        background: #d1ecf1;
+        border-radius: 10px;
+        border-left: 5px solid #17a2b8;
+        margin: 1rem 0;
+    }
+    .success-box {
+        padding: 1rem;
+        background: #d4edda;
+        border-radius: 10px;
+        border-left: 5px solid #28a745;
+        margin: 1rem 0;
+    }
     </style>
 """, unsafe_allow_html=True)
 
@@ -173,6 +186,8 @@ def initialize_session_state():
         st.session_state.model_results = None
     if 'confidence_threshold' not in st.session_state:
         st.session_state.confidence_threshold = 0.5
+    if 'gif_displayed' not in st.session_state:
+        st.session_state.gif_displayed = False
 
 initialize_session_state()
 
@@ -186,17 +201,12 @@ def load_data():
         url = 'https://raw.githubusercontent.com/datascintist-abusufian/Text-Data-Classification-App-Probuild360/main/test.csv'
         df = pd.read_csv(url)
         
-        # Check and rename columns
         if 'Statement' not in df.columns and 'Truth Value' not in df.columns:
-            # Try to find appropriate columns
             text_col = next((col for col in df.columns if 'statement' in col.lower() or 'text' in col.lower()), df.columns[0])
             label_col = next((col for col in df.columns if 'truth' in col.lower() or 'label' in col.lower() or 'class' in col.lower()), df.columns[1])
             df = df.rename(columns={text_col: 'Statement', label_col: 'Truth Value'})
         
-        # Drop rows with missing values
         df = df.dropna(subset=['Statement', 'Truth Value'])
-        
-        # Clean text
         df['Statement'] = df['Statement'].astype(str).apply(clean_text)
         
         return df
@@ -210,20 +220,16 @@ def load_data():
 def train_model(df):
     """Train the text classification model"""
     try:
-        # Prepare features and labels
         X = df['Statement'].apply(preprocess_text)
         y = df['Truth Value']
         
-        # Encode labels
         label_encoder = LabelEncoder()
         y_encoded = label_encoder.fit_transform(y)
         
-        # Split data with stratification
         X_train, X_test, y_train, y_test = train_test_split(
             X, y_encoded, test_size=0.2, random_state=42, stratify=y_encoded
         )
         
-        # Create TF-IDF vectorizer
         vectorizer = TfidfVectorizer(
             max_features=5000,
             ngram_range=(1, 2),
@@ -231,19 +237,15 @@ def train_model(df):
             max_df=0.8
         )
         
-        # Transform data
         X_train_tfidf = vectorizer.fit_transform(X_train)
         X_test_tfidf = vectorizer.transform(X_test)
         
-        # Train classifier
         classifier = MultinomialNB(alpha=0.1)
         classifier.fit(X_train_tfidf, y_train)
         
-        # Evaluate
         y_pred = classifier.predict(X_test_tfidf)
         accuracy = accuracy_score(y_test, y_pred)
         
-        # Store in session state
         st.session_state.classifier = classifier
         st.session_state.vectorizer = vectorizer
         st.session_state.label_encoder = label_encoder
@@ -252,7 +254,10 @@ def train_model(df):
             'accuracy': accuracy,
             'y_test': y_test,
             'y_pred': y_pred,
-            'class_names': label_encoder.classes_
+            'class_names': label_encoder.classes_,
+            'X_test_tfidf': X_test_tfidf,
+            'X_train_tfidf': X_train_tfidf,
+            'y_train': y_train
         }
         
         return True
@@ -260,6 +265,49 @@ def train_model(df):
     except Exception as e:
         st.error(f"❌ Error training model: {str(e)}")
         return False
+
+# ============================================================================
+# GIF DISPLAY FUNCTION
+# ============================================================================
+def get_base64_gif(gif_path):
+    """Convert GIF to base64 for embedding"""
+    try:
+        with open(gif_path, 'rb') as f:
+            gif_bytes = f.read()
+        return base64.b64encode(gif_bytes).decode('utf-8')
+    except:
+        return None
+
+def display_gif():
+    """Display the Markov chain GIF"""
+    # Try different possible locations
+    gif_paths = [
+        "markov_chain.gif",
+        "images/markov_chain.gif",
+        "static/markov_chain.gif",
+        "assets/markov_chain.gif"
+    ]
+    
+    for path in gif_paths:
+        if os.path.exists(path):
+            gif_base64 = get_base64_gif(path)
+            if gif_base64:
+                st.markdown(f"""
+                <div style="text-align: center; margin: 1rem 0;">
+                    <img src="data:image/gif;base64,{gif_base64}" 
+                         style="max-width: 100%; max-height: 300px; border-radius: 10px;" 
+                         alt="Markov Chain Animation">
+                </div>
+                """, unsafe_allow_html=True)
+                return True
+    
+    # If no GIF found, display a placeholder
+    st.info("""
+    💡 **Markov Chain Animation**  
+    A Markov chain is a stochastic model describing a sequence of possible events 
+    where the probability of each event depends only on the state attained in the previous event.
+    """)
+    return False
 
 # ============================================================================
 # VISUALIZATION FUNCTIONS
@@ -272,14 +320,12 @@ def create_class_distribution(df):
             
         class_counts = df['Truth Value'].value_counts()
         
-        # Create figure with subplots
         fig = make_subplots(
             rows=1, cols=2,
             subplot_titles=['Class Distribution (Bar)', 'Class Distribution (Pie)'],
             specs=[[{"type": "bar"}, {"type": "pie"}]]
         )
         
-        # Bar chart
         fig.add_trace(
             go.Bar(
                 x=class_counts.index,
@@ -292,7 +338,6 @@ def create_class_distribution(df):
             row=1, col=1
         )
         
-        # Pie chart
         fig.add_trace(
             go.Pie(
                 labels=class_counts.index,
@@ -308,6 +353,59 @@ def create_class_distribution(df):
         
     except Exception as e:
         st.warning(f"Could not create distribution chart: {str(e)}")
+        return None
+
+def create_spider_chart(model_results):
+    """Create spider/radar chart for model performance metrics"""
+    try:
+        if not model_results:
+            return None
+        
+        # Calculate metrics for each class
+        report = classification_report(
+            model_results['y_test'],
+            model_results['y_pred'],
+            target_names=model_results['class_names'],
+            output_dict=True
+        )
+        
+        # Prepare data for radar chart
+        categories = ['Precision', 'Recall', 'F1-Score']
+        
+        fig = go.Figure()
+        
+        for class_name in model_results['class_names']:
+            if class_name in report:
+                values = [
+                    report[class_name]['precision'],
+                    report[class_name]['recall'],
+                    report[class_name]['f1-score']
+                ]
+                
+                fig.add_trace(go.Scatterpolar(
+                    r=values,
+                    theta=categories,
+                    fill='toself',
+                    name=class_name,
+                    line=dict(width=2)
+                ))
+        
+        fig.update_layout(
+            polar=dict(
+                radialaxis=dict(
+                    visible=True,
+                    range=[0, 1]
+                )
+            ),
+            title='Model Performance Radar Chart',
+            height=500,
+            showlegend=True
+        )
+        
+        return fig
+        
+    except Exception as e:
+        st.warning(f"Could not create spider chart: {str(e)}")
         return None
 
 def create_confusion_matrix(y_test, y_pred, class_names):
@@ -336,63 +434,157 @@ def create_confusion_matrix(y_test, y_pred, class_names):
         st.warning(f"Could not create confusion matrix: {str(e)}")
         return None
 
-def create_feature_importance(vectorizer, classifier, label_encoder, top_n=20):
-    """Create feature importance visualization"""
+def create_word_cloud(df, class_name=None):
+    """Create word cloud for text data"""
+    try:
+        if class_name:
+            texts = df[df['Truth Value'] == class_name]['Statement'].tolist()
+            title = f"Word Cloud - {class_name}"
+        else:
+            texts = df['Statement'].tolist()
+            title = "Word Cloud - All Classes"
+        
+        if not texts:
+            return None
+        
+        text = ' '.join(texts)
+        
+        # Generate word cloud
+        wordcloud = WordCloud(
+            width=800,
+            height=400,
+            background_color='white',
+            colormap='viridis',
+            max_words=100
+        ).generate(text)
+        
+        # Convert to image
+        fig, ax = plt.subplots(figsize=(10, 5))
+        ax.imshow(wordcloud, interpolation='bilinear')
+        ax.axis('off')
+        ax.set_title(title, fontsize=16, pad=20)
+        
+        return fig
+        
+    except Exception as e:
+        st.warning(f"Could not create word cloud: {str(e)}")
+        return None
+
+def create_text_length_distribution(df):
+    """Create text length distribution visualization"""
+    try:
+        df['text_length'] = df['Statement'].apply(len)
+        
+        fig = make_subplots(
+            rows=1, cols=2,
+            subplot_titles=['Text Length Distribution', 'Length by Class']
+        )
+        
+        # Overall distribution
+        fig.add_trace(
+            go.Histogram(
+                x=df['text_length'],
+                nbinsx=30,
+                marker_color='#667eea',
+                name='All Texts'
+            ),
+            row=1, col=1
+        )
+        
+        # Length by class
+        for class_name in df['Truth Value'].unique():
+            class_data = df[df['Truth Value'] == class_name]['text_length']
+            fig.add_trace(
+                go.Box(
+                    y=class_data,
+                    name=class_name,
+                    boxmean='sd'
+                ),
+                row=1, col=2
+            )
+        
+        fig.update_layout(height=400, showlegend=False)
+        return fig
+        
+    except Exception as e:
+        st.warning(f"Could not create length distribution: {str(e)}")
+        return None
+
+def create_tsne_visualization(model_results):
+    """Create t-SNE visualization of text embeddings"""
+    try:
+        if not model_results or 'X_train_tfidf' not in model_results:
+            return None
+        
+        # Sample data for visualization
+        X = model_results['X_train_tfidf'][:500]  # Limit for performance
+        y = model_results['y_train'][:500]
+        
+        # Apply t-SNE
+        tsne = TSNE(n_components=2, random_state=42, perplexity=30)
+        X_tsne = tsne.fit_transform(X.toarray())
+        
+        # Create dataframe
+        df_tsne = pd.DataFrame({
+            'x': X_tsne[:, 0],
+            'y': X_tsne[:, 1],
+            'class': [model_results['class_names'][i] for i in y]
+        })
+        
+        fig = px.scatter(
+            df_tsne,
+            x='x',
+            y='y',
+            color='class',
+            title='t-SNE Visualization of Text Embeddings',
+            labels={'x': 't-SNE 1', 'y': 't-SNE 2'},
+            color_discrete_sequence=px.colors.qualitative.Set2
+        )
+        
+        fig.update_layout(height=500)
+        return fig
+        
+    except Exception as e:
+        st.warning(f"Could not create t-SNE visualization: {str(e)}")
+        return None
+
+def create_top_words_per_class(vectorizer, classifier, label_encoder, top_n=15):
+    """Create visualization of top words per class"""
     try:
         feature_names = vectorizer.get_feature_names_out()
         log_probs = classifier.feature_log_prob_
         
-        # Calculate importance for each class
-        importance_data = []
+        fig = make_subplots(
+            rows=len(label_encoder.classes_), 
+            cols=1,
+            subplot_titles=[f"Top Words - {class_name}" for class_name in label_encoder.classes_],
+            shared_xaxes=True
+        )
+        
         for i, class_name in enumerate(label_encoder.classes_):
             importance = np.exp(log_probs[i])
             top_indices = np.argsort(importance)[-top_n:]
+            top_words = [feature_names[idx] for idx in top_indices]
+            top_scores = [importance[idx] for idx in top_indices]
             
-            for idx in top_indices:
-                importance_data.append({
-                    'Class': class_name,
-                    'Feature': feature_names[idx],
-                    'Importance': importance[idx]
-                })
+            fig.add_trace(
+                go.Bar(
+                    x=top_scores,
+                    y=top_words,
+                    orientation='h',
+                    name=class_name,
+                    marker_color=px.colors.qualitative.Set2[i % len(px.colors.qualitative.Set2)]
+                ),
+                row=i+1, col=1
+            )
         
-        df_importance = pd.DataFrame(importance_data)
+        fig.update_layout(height=200 * len(label_encoder.classes_), showlegend=False)
+        fig.update_xaxes(title_text="Importance Score")
         
-        fig = px.bar(
-            df_importance,
-            x='Feature',
-            y='Importance',
-            color='Class',
-            title=f'Top {top_n} Features by Class',
-            facet_col='Class',
-            facet_col_wrap=2,
-            height=500
-        )
-        
-        fig.update_layout(showlegend=False)
         return fig
         
     except Exception as e:
-        st.warning(f"Could not create feature importance: {str(e)}")
-        return None
-
-def create_prediction_metrics():
-    """Create prediction metrics dashboard"""
-    if not st.session_state.prediction_history:
-        return None
-    
-    try:
-        df_history = pd.DataFrame(st.session_state.prediction_history)
-        class_counts = df_history['prediction'].value_counts()
-        
-        fig = px.pie(
-            values=class_counts.values,
-            names=class_counts.index,
-            title='Prediction Distribution',
-            hole=0.3
-        )
-        
-        return fig
-    except:
+        st.warning(f"Could not create top words visualization: {str(e)}")
         return None
 
 # ============================================================================
@@ -405,23 +597,17 @@ def predict_text(text):
         return None, None
     
     try:
-        # Preprocess text
         processed_text = preprocess_text(text)
-        
-        # Transform
         text_tfidf = st.session_state.vectorizer.transform([processed_text])
         
-        # Predict
         prediction_encoded = st.session_state.classifier.predict(text_tfidf)
         prediction = st.session_state.label_encoder.inverse_transform(prediction_encoded)[0]
         
-        # Get probabilities
         probabilities = st.session_state.classifier.predict_proba(text_tfidf)
         prob_dict = dict(zip(st.session_state.label_encoder.classes_, probabilities[0]))
         
-        # Store in history
         st.session_state.prediction_history.append({
-            'text': text[:100],  # Truncate for storage
+            'text': text[:100],
             'prediction': prediction,
             'confidence': max(probabilities[0])
         })
@@ -445,6 +631,10 @@ def main():
         <p>Machine Learning powered text classification with comprehensive analytics</p>
     </div>
     """, unsafe_allow_html=True)
+    
+    # Display GIF
+    st.markdown("### 🔄 Markov Chain Visualization")
+    display_gif()
     
     # Sidebar
     with st.sidebar:
@@ -500,12 +690,13 @@ def main():
         df = st.session_state.df
         
         # Create tabs
-        tab1, tab2, tab3, tab4, tab5 = st.tabs([
+        tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
             "📊 Data Explorer",
             "🎯 Single Prediction",
             "📈 Model Analysis",
             "📄 Batch Processing",
-            "📝 History"
+            "📝 History",
+            "🔬 Advanced Analytics"
         ])
         
         with tab1:
@@ -517,6 +708,28 @@ def main():
                 st.plotly_chart(fig_dist, use_container_width=True)
             else:
                 st.info("No data available for visualization")
+            
+            # Text length distribution
+            fig_length = create_text_length_distribution(df)
+            if fig_length:
+                st.plotly_chart(fig_length, use_container_width=True)
+            
+            # Word clouds
+            st.markdown("### ☁️ Word Clouds")
+            
+            # Overall word cloud
+            fig_wc = create_word_cloud(df)
+            if fig_wc:
+                st.pyplot(fig_wc)
+            
+            # Word clouds per class
+            st.markdown("#### Word Clouds by Class")
+            cols = st.columns(min(3, len(df['Truth Value'].unique())))
+            for idx, class_name in enumerate(df['Truth Value'].unique()[:3]):
+                with cols[idx % 3]:
+                    fig_wc_class = create_word_cloud(df, class_name)
+                    if fig_wc_class:
+                        st.pyplot(fig_wc_class)
             
             # Data preview
             st.markdown("### 📋 Data Preview")
@@ -551,7 +764,6 @@ def main():
             
             st.info("Enter text to classify. The model will predict the most likely class and show confidence scores for all classes.")
             
-            # Text input
             text_input = st.text_area(
                 "Enter text for classification:",
                 placeholder="Enter your text here for classification...",
@@ -565,7 +777,6 @@ def main():
                         prediction, probabilities = predict_text(text_input)
                         
                         if prediction and probabilities:
-                            # Display prediction
                             confidence = probabilities[prediction]
                             confidence_color = "#28a745" if confidence >= st.session_state.confidence_threshold else "#ffc107"
                             
@@ -579,7 +790,6 @@ def main():
                             </div>
                             """, unsafe_allow_html=True)
                             
-                            # Show all class probabilities
                             st.markdown("#### Class Probabilities")
                             
                             prob_df = pd.DataFrame({
@@ -587,7 +797,6 @@ def main():
                                 'Probability': list(probabilities.values())
                             })
                             
-                            # Create probability bar chart
                             fig = px.bar(
                                 prob_df,
                                 x='Class',
@@ -608,13 +817,29 @@ def main():
             if st.session_state.model_results:
                 results = st.session_state.model_results
                 
-                col1, col2, col3 = st.columns(3)
+                col1, col2, col3, col4 = st.columns(4)
                 with col1:
                     st.metric("Model Accuracy", f"{results['accuracy']:.2%}")
                 with col2:
                     st.metric("Test Samples", len(results['y_test']))
                 with col3:
                     st.metric("Classes", len(results['class_names']))
+                with col4:
+                    # Calculate macro F1 score
+                    report = classification_report(
+                        results['y_test'],
+                        results['y_pred'],
+                        target_names=results['class_names'],
+                        output_dict=True
+                    )
+                    f1_macro = report['macro avg']['f1-score']
+                    st.metric("Macro F1", f"{f1_macro:.3f}")
+                
+                # Radar Chart (Spider Graph)
+                st.markdown("#### 🕸️ Performance Radar Chart")
+                fig_radar = create_spider_chart(results)
+                if fig_radar:
+                    st.plotly_chart(fig_radar, use_container_width=True)
                 
                 # Confusion Matrix
                 st.markdown("#### Confusion Matrix")
@@ -630,15 +855,18 @@ def main():
                 
                 # Classification Report
                 st.markdown("#### Classification Report")
-                report = classification_report(
-                    results['y_test'],
-                    results['y_pred'],
-                    target_names=results['class_names'],
-                    output_dict=True
-                )
-                
                 report_df = pd.DataFrame(report).transpose()
                 st.dataframe(report_df.round(4), use_container_width=True)
+                
+                # Top Words per Class
+                st.markdown("#### 🏆 Top Words per Class")
+                fig_top_words = create_top_words_per_class(
+                    st.session_state.vectorizer,
+                    st.session_state.classifier,
+                    st.session_state.label_encoder
+                )
+                if fig_top_words:
+                    st.plotly_chart(fig_top_words, use_container_width=True)
                 
                 # Feature Importance
                 st.markdown("#### Feature Importance")
@@ -667,7 +895,6 @@ def main():
                 try:
                     batch_df = pd.read_csv(uploaded_file)
                     
-                    # Find text column
                     text_col = next((col for col in batch_df.columns if 'text' in col.lower() or 'statement' in col.lower()), batch_df.columns[0])
                     
                     st.markdown(f"#### Batch Data Preview (using column: '{text_col}')")
@@ -691,15 +918,12 @@ def main():
                                     predictions.append("Empty")
                                     confidences.append(0)
                             
-                            # Add predictions to dataframe
                             batch_df['prediction'] = predictions
                             batch_df['confidence'] = confidences
                             
-                            # Display results
                             st.markdown("#### Prediction Results")
                             st.dataframe(batch_df, use_container_width=True)
                             
-                            # Download results
                             csv = batch_df.to_csv(index=False)
                             st.download_button(
                                 label="📥 Download Predictions",
@@ -708,7 +932,6 @@ def main():
                                 mime="text/csv"
                             )
                             
-                            # Summary statistics
                             st.markdown("#### Summary Statistics")
                             col1, col2, col3 = st.columns(3)
                             with col1:
@@ -730,14 +953,16 @@ def main():
             if st.session_state.prediction_history:
                 history_df = pd.DataFrame(st.session_state.prediction_history)
                 
-                col1, col2 = st.columns(2)
+                col1, col2, col3 = st.columns(3)
                 with col1:
                     st.metric("Total Predictions", len(history_df))
                 with col2:
                     unique_classes = len(history_df['prediction'].unique())
                     st.metric("Unique Classes Predicted", unique_classes)
+                with col3:
+                    avg_conf = history_df['confidence'].mean()
+                    st.metric("Average Confidence", f"{avg_conf:.2%}")
                 
-                # Display history
                 st.dataframe(history_df, use_container_width=True)
                 
                 # Prediction distribution
@@ -745,15 +970,111 @@ def main():
                 if fig:
                     st.plotly_chart(fig, use_container_width=True)
                 
-                # Clear history
                 if st.button("🗑️ Clear History", use_container_width=True):
                     st.session_state.prediction_history = []
                     st.rerun()
             else:
                 st.info("ℹ️ No predictions made yet. Start predicting in the 'Single Prediction' tab.")
+        
+        with tab6:
+            st.markdown("### 🔬 Advanced Analytics")
+            
+            if st.session_state.model_trained:
+                # t-SNE Visualization
+                st.markdown("#### 🎯 t-SNE Visualization")
+                fig_tsne = create_tsne_visualization(st.session_state.model_results)
+                if fig_tsne:
+                    st.plotly_chart(fig_tsne, use_container_width=True)
+                else:
+                    st.info("t-SNE visualization not available")
+                
+                # Text Statistics
+                st.markdown("#### 📊 Text Statistics")
+                
+                col1, col2, col3 = st.columns(3)
+                
+                # Character count statistics
+                char_counts = df['Statement'].apply(len)
+                with col1:
+                    st.metric("Average Length", f"{char_counts.mean():.1f} chars")
+                with col2:
+                    st.metric("Median Length", f"{char_counts.median():.0f} chars")
+                with col3:
+                    st.metric("Max Length", f"{char_counts.max():.0f} chars")
+                
+                # Vocabulary analysis
+                all_words = ' '.join(df['Statement']).split()
+                vocab_size = len(set(all_words))
+                st.metric("Vocabulary Size", vocab_size)
+                
+                # Common words
+                st.markdown("#### 🔤 Most Common Words")
+                word_counts = Counter(all_words)
+                common_words = pd.DataFrame(word_counts.most_common(20), columns=['Word', 'Count'])
+                
+                fig = px.bar(
+                    common_words,
+                    x='Word',
+                    y='Count',
+                    title='Top 20 Most Common Words',
+                    color='Count',
+                    color_continuous_scale='Viridis'
+                )
+                st.plotly_chart(fig, use_container_width=True)
+                
+                # Class-specific statistics
+                st.markdown("#### 📈 Class-Specific Statistics")
+                
+                class_stats = []
+                for class_name in df['Truth Value'].unique():
+                    class_df = df[df['Truth Value'] == class_name]
+                    lengths = class_df['Statement'].apply(len)
+                    class_stats.append({
+                        'Class': class_name,
+                        'Count': len(class_df),
+                        'Avg Length': lengths.mean(),
+                        'Std Length': lengths.std(),
+                        'Min Length': lengths.min(),
+                        'Max Length': lengths.max()
+                    })
+                
+                stats_df = pd.DataFrame(class_stats)
+                st.dataframe(stats_df.round(2), use_container_width=True)
+                
+                # Co-occurrence analysis
+                st.markdown("#### 🔗 Word Co-occurrence")
+                
+                # Simple co-occurrence analysis for top words
+                top_words = [word for word, _ in word_counts.most_common(10)]
+                co_occurrence = {}
+                
+                for word in top_words:
+                    co_occurrence[word] = {}
+                    for other in top_words:
+                        if word != other:
+                            count = 0
+                            for text in df['Statement']:
+                                if word in text and other in text:
+                                    count += 1
+                            co_occurrence[word][other] = count
+                
+                if co_occurrence:
+                    co_df = pd.DataFrame(co_occurrence).fillna(0)
+                    fig = px.imshow(
+                        co_df.values,
+                        x=co_df.columns,
+                        y=co_df.index,
+                        text_auto=True,
+                        aspect="auto",
+                        color_continuous_scale='Blues',
+                        title='Word Co-occurrence Matrix'
+                    )
+                    st.plotly_chart(fig, use_container_width=True)
+                
+            else:
+                st.info("ℹ️ Train the model first to see advanced analytics")
     
     else:
-        # No data loaded
         st.warning("⚠️ No data loaded. Click the 'Load & Train Model' button in the sidebar to get started.")
         
         st.markdown("""
@@ -763,6 +1084,7 @@ def main():
         2. Wait for the model to train (this may take a few seconds)
         3. Start predicting text in the **Single Prediction** tab
         4. Explore data in the **Data Explorer** tab
+        5. Check **Advanced Analytics** for deeper insights
         
         #### Features:
         - ✅ Text classification with TF-IDF and Naive Bayes
@@ -770,13 +1092,17 @@ def main():
         - ✅ Batch prediction support
         - ✅ Comprehensive analytics
         - ✅ Prediction history tracking
+        - ✅ Radar/Spider charts
+        - ✅ Word clouds
+        - ✅ t-SNE visualization
+        - ✅ Text statistics and analysis
         """)
     
     # Footer
     st.markdown("---")
     st.markdown("""
     <div style='text-align: center; color: #666; padding: 1rem;'>
-        <p>📝 Advanced Text Classification App v2.0</p>
+        <p>📝 Advanced Text Classification App v3.0</p>
         <p style='font-size: 0.8rem;'>Author: Md Abu Sufian | For educational and research purposes</p>
     </div>
     """, unsafe_allow_html=True)
