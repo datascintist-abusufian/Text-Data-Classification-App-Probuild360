@@ -1,80 +1,797 @@
 import streamlit as st
 import pandas as pd
+import numpy as np
 from sklearn.model_selection import train_test_split
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.naive_bayes import MultinomialNB
-from sklearn.metrics import accuracy_score, classification_report
+from sklearn.metrics import accuracy_score, classification_report, confusion_matrix
+from sklearn.pipeline import Pipeline
+from sklearn.preprocessing import LabelEncoder
+import re
+import nltk
+from nltk.corpus import stopwords
+from nltk.stem import WordNetLemmatizer
+import plotly.express as px
+import plotly.graph_objects as go
+from plotly.subplots import make_subplots
+import seaborn as sns
+import matplotlib.pyplot as plt
+from io import BytesIO
+import base64
+import warnings
+warnings.filterwarnings('ignore')
 
-# Data loading function with caching
-@st.cache(allow_output_mutation=True)
-def load_data_from_github():
-    url = 'https://raw.githubusercontent.com/datascintist-abusufian/Text-Data-Classification-App-Probuild360/main/test.csv'
+# Download required NLTK data
+@st.cache_resource
+def download_nltk_data():
     try:
-        df = pd.read_csv(url)
+        nltk.data.find('tokenizers/punkt')
+        nltk.data.find('corpora/stopwords')
+        nltk.data.find('corpora/wordnet')
+    except LookupError:
+        nltk.download('punkt', quiet=True)
+        nltk.download('stopwords', quiet=True)
+        nltk.download('wordnet', quiet=True)
+        nltk.download('omw-1.4', quiet=True)
+
+download_nltk_data()
+
+# ============================================================================
+# CONSTANTS AND CONFIGURATION
+# ============================================================================
+GITHUB_URL = 'https://raw.githubusercontent.com/datascintist-abusufian/Text-Data-Classification-App-Probuild360/main/test.csv'
+DEFAULT_TEXT = "Enter your text here for classification..."
+
+# ============================================================================
+# PAGE CONFIGURATION
+# ============================================================================
+st.set_page_config(
+    page_title="Advanced Text Classification App",
+    page_icon="📝",
+    layout="wide",
+    initial_sidebar_state="expanded"
+)
+
+# ============================================================================
+# CUSTOM CSS
+# ============================================================================
+st.markdown("""
+    <style>
+    .main { padding: 2rem; }
+    .gradient-header {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        padding: 2rem;
+        border-radius: 15px;
+        margin: 1rem 0;
+        text-align: center;
+    }
+    .metric-card {
+        background: linear-gradient(135deg, #f8f9fa, #e9ecef);
+        border-radius: 15px;
+        padding: 1.5rem;
+        margin: 0.5rem 0;
+        box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        border-left: 5px solid #667eea;
+        transition: transform 0.3s;
+    }
+    .metric-card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 6px 12px rgba(0,0,0,0.15);
+    }
+    .success-box {
+        padding: 1rem;
+        background: #d4edda;
+        border-radius: 10px;
+        border-left: 5px solid #28a745;
+        margin: 1rem 0;
+    }
+    .warning-box {
+        padding: 1rem;
+        background: #fff3cd;
+        border-radius: 10px;
+        border-left: 5px solid #ffc107;
+        margin: 1rem 0;
+    }
+    .info-box {
+        padding: 1rem;
+        background: #d1ecf1;
+        border-radius: 10px;
+        border-left: 5px solid #17a2b8;
+        margin: 1rem 0;
+    }
+    .prediction-card {
+        padding: 1.5rem;
+        border-radius: 15px;
+        text-align: center;
+        margin: 1rem 0;
+        font-size: 1.5rem;
+        font-weight: bold;
+    }
+    .stButton>button {
+        width: 100%;
+        background: linear-gradient(135deg, #667eea, #764ba2);
+        color: white;
+        border-radius: 10px;
+        padding: 0.75rem 1.5rem;
+        margin: 0.5rem 0;
+        font-weight: bold;
+        border: none;
+        transition: all 0.3s;
+    }
+    .stButton>button:hover {
+        transform: scale(1.02);
+        box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+    }
+    </style>
+""", unsafe_allow_html=True)
+
+# ============================================================================
+# SESSION STATE
+# ============================================================================
+def initialize_session_state():
+    """Initialize session state variables"""
+    if 'classifier' not in st.session_state:
+        st.session_state.classifier = None
+    if 'vectorizer' not in st.session_state:
+        st.session_state.vectorizer = None
+    if 'label_encoder' not in st.session_state:
+        st.session_state.label_encoder = None
+    if 'df' not in st.session_state:
+        st.session_state.df = None
+    if 'prediction_history' not in st.session_state:
+        st.session_state.prediction_history = []
+    if 'model_trained' not in st.session_state:
+        st.session_state.model_trained = False
+
+initialize_session_state()
+
+# ============================================================================
+# DATA LOADING AND PREPROCESSING
+# ============================================================================
+@st.cache_data
+def load_data():
+    """Load and preprocess data from GitHub"""
+    try:
+        df = pd.read_csv(GITHUB_URL)
+        
+        # Check required columns
+        required_cols = ['Statement', 'Truth Value']
+        if not all(col in df.columns for col in required_cols):
+            st.warning("Dataset missing required columns. Using available columns...")
+            # Try to find appropriate columns
+            text_col = next((col for col in df.columns if 'statement' in col.lower() or 'text' in col.lower()), df.columns[0])
+            label_col = next((col for col in df.columns if 'truth' in col.lower() or 'label' in col.lower() or 'class' in col.lower()), df.columns[1])
+            df = df.rename(columns={text_col: 'Statement', label_col: 'Truth Value'})
+        
+        # Drop rows with missing values
         df = df.dropna(subset=['Statement', 'Truth Value'])
+        
+        # Clean text
+        df['Statement'] = df['Statement'].astype(str).apply(clean_text)
+        
         return df
     except Exception as e:
-        st.error(f"An error occurred while loading the data: {e}")
+        st.error(f"❌ Error loading data: {str(e)}")
         return pd.DataFrame()
 
-# Load the dataset immediately for use in the app
-df = load_data_from_github()
+def clean_text(text):
+    """Clean and preprocess text"""
+    if not isinstance(text, str):
+        text = str(text)
+    
+    # Convert to lowercase
+    text = text.lower()
+    
+    # Remove special characters and digits
+    text = re.sub(r'[^a-zA-Z\s]', '', text)
+    
+    # Remove extra whitespace
+    text = ' '.join(text.split())
+    
+    return text
 
-# Display the app title and description
-st.image("markov_chain.gif", use_column_width=True)
-st.title("Text Data Classification App-Probuild360")
-st.write("This app demonstrates text classification into different classes using Streamlit.")
-st.markdown("<span style='color:blue'>Author Md Abu Sufian</span>", unsafe_allow_html=True)
-st.markdown("""
-    <div style='color: green;'>
-        <strong>Important Note:</strong> The accuracy score is based on an analysis using test data,
-        which is a subset typically used to evaluate the model's predictions and not for training.
-        Therefore, the scores may not reflect the model's potential accuracy with a fully trained dataset.
+def preprocess_text(text):
+    """Advanced text preprocessing"""
+    if not text:
+        return ""
+    
+    # Tokenize
+    tokens = nltk.word_tokenize(text)
+    
+    # Remove stopwords
+    stop_words = set(stopwords.words('english'))
+    tokens = [token for token in tokens if token not in stop_words]
+    
+    # Lemmatize
+    lemmatizer = WordNetLemmatizer()
+    tokens = [lemmatizer.lemmatize(token) for token in tokens]
+    
+    return ' '.join(tokens)
+
+# ============================================================================
+# MODEL TRAINING
+# ============================================================================
+def train_model(df):
+    """Train the text classification model"""
+    try:
+        # Prepare features and labels
+        X = df['Statement'].apply(preprocess_text)
+        y = df['Truth Value']
+        
+        # Encode labels
+        label_encoder = LabelEncoder()
+        y_encoded = label_encoder.fit_transform(y)
+        
+        # Split data
+        X_train, X_test, y_train, y_test = train_test_split(
+            X, y_encoded, test_size=0.2, random_state=42, stratify=y_encoded
+        )
+        
+        # Create TF-IDF vectorizer
+        vectorizer = TfidfVectorizer(
+            max_features=5000,
+            ngram_range=(1, 2),
+            min_df=2,
+            max_df=0.8
+        )
+        
+        # Transform training data
+        X_train_tfidf = vectorizer.fit_transform(X_train)
+        X_test_tfidf = vectorizer.transform(X_test)
+        
+        # Train classifier
+        classifier = MultinomialNB(alpha=0.1)
+        classifier.fit(X_train_tfidf, y_train)
+        
+        # Evaluate model
+        y_pred = classifier.predict(X_test_tfidf)
+        accuracy = accuracy_score(y_test, y_pred)
+        
+        # Store in session state
+        st.session_state.classifier = classifier
+        st.session_state.vectorizer = vectorizer
+        st.session_state.label_encoder = label_encoder
+        st.session_state.model_trained = True
+        
+        return {
+            'accuracy': accuracy,
+            'y_test': y_test,
+            'y_pred': y_pred,
+            'class_names': label_encoder.classes_
+        }
+        
+    except Exception as e:
+        st.error(f"❌ Error training model: {str(e)}")
+        return None
+
+# ============================================================================
+# VISUALIZATION FUNCTIONS
+# ============================================================================
+def create_confusion_matrix(y_test, y_pred, class_names):
+    """Create confusion matrix visualization"""
+    cm = confusion_matrix(y_test, y_pred)
+    
+    fig = px.imshow(
+        cm,
+        x=class_names,
+        y=class_names,
+        text_auto=True,
+        aspect="auto",
+        color_continuous_scale='Blues',
+        title="Confusion Matrix"
+    )
+    
+    fig.update_layout(
+        xaxis_title="Predicted",
+        yaxis_title="Actual",
+        height=400
+    )
+    
+    return fig
+
+def create_class_distribution(df):
+    """Create class distribution visualization"""
+    class_counts = df['Truth Value'].value_counts()
+    
+    fig = make_subplots(
+        rows=1, cols=2,
+        subplot_titles=['Class Distribution (Bar)', 'Class Distribution (Pie)']
+    )
+    
+    # Bar chart
+    fig.add_trace(
+        go.Bar(
+            x=class_counts.index,
+            y=class_counts.values,
+            marker_color='#667eea',
+            text=class_counts.values,
+            textposition='auto'
+        ),
+        row=1, col=1
+    )
+    
+    # Pie chart
+    fig.add_trace(
+        go.Pie(
+            labels=class_counts.index,
+            values=class_counts.values,
+            hole=0.3
+        ),
+        row=1, col=2
+    )
+    
+    fig.update_layout(height=400, showlegend=False)
+    return fig
+
+def create_feature_importance(vectorizer, classifier, top_n=20):
+    """Create feature importance visualization"""
+    try:
+        feature_names = vectorizer.get_feature_names_out()
+        log_probs = classifier.feature_log_prob_
+        
+        # Calculate importance for each class
+        importance_data = []
+        for i, class_name in enumerate(st.session_state.label_encoder.classes_):
+            importance = np.exp(log_probs[i])
+            top_indices = np.argsort(importance)[-top_n:]
+            
+            for idx in top_indices:
+                importance_data.append({
+                    'Class': class_name,
+                    'Feature': feature_names[idx],
+                    'Importance': importance[idx]
+                })
+        
+        df_importance = pd.DataFrame(importance_data)
+        fig = px.bar(
+            df_importance,
+            x='Feature',
+            y='Importance',
+            color='Class',
+            title=f'Top {top_n} Features by Class',
+            facet_col='Class',
+            facet_col_wrap=2
+        )
+        
+        fig.update_layout(height=500, showlegend=False)
+        return fig
+        
+    except Exception as e:
+        st.warning(f"Could not create feature importance: {str(e)}")
+        return None
+
+def create_prediction_metrics():
+    """Create prediction metrics dashboard"""
+    if not st.session_state.prediction_history:
+        return None
+    
+    df_history = pd.DataFrame(st.session_state.prediction_history)
+    class_counts = df_history['prediction'].value_counts()
+    
+    fig = px.pie(
+        values=class_counts.values,
+        names=class_counts.index,
+        title='Prediction Distribution',
+        hole=0.3
+    )
+    
+    return fig
+
+# ============================================================================
+# PREDICTION FUNCTION
+# ============================================================================
+def predict_text(text):
+    """Predict class for input text"""
+    if not st.session_state.model_trained:
+        st.warning("⚠️ Model not trained yet. Please load data first.")
+        return None
+    
+    try:
+        # Preprocess text
+        processed_text = preprocess_text(text)
+        
+        # Transform
+        text_tfidf = st.session_state.vectorizer.transform([processed_text])
+        
+        # Predict
+        prediction_encoded = st.session_state.classifier.predict(text_tfidf)
+        prediction = st.session_state.label_encoder.inverse_transform(prediction_encoded)[0]
+        
+        # Get probabilities
+        probabilities = st.session_state.classifier.predict_proba(text_tfidf)
+        prob_dict = dict(zip(st.session_state.label_encoder.classes_, probabilities[0]))
+        
+        # Store in history
+        st.session_state.prediction_history.append({
+            'text': text,
+            'prediction': prediction,
+            'confidence': max(probabilities[0])
+        })
+        
+        return prediction, prob_dict
+        
+    except Exception as e:
+        st.error(f"❌ Error making prediction: {str(e)}")
+        return None, None
+
+# ============================================================================
+# MAIN APPLICATION
+# ============================================================================
+def main():
+    """Main application function"""
+    
+    # Header
+    st.markdown("""
+    <div class="gradient-header">
+        <h1>📝 Advanced Text Classification App</h1>
+        <p>Machine Learning powered text classification with comprehensive analytics</p>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    # Sidebar
+    with st.sidebar:
+        st.title("🎛️ Control Panel")
+        
+        # Model Training Section
+        st.markdown("### 📊 Data Loading")
+        if st.button("🔄 Load & Train Model", use_container_width=True):
+            with st.spinner("Loading data and training model..."):
+                df = load_data()
+                if not df.empty:
+                    st.session_state.df = df
+                    results = train_model(df)
+                    if results:
+                        st.success(f"✅ Model trained with {results['accuracy']:.2%} accuracy!")
+                        st.session_state.model_results = results
+                else:
+                    st.error("❌ Failed to load data")
+        
+        if st.session_state.model_trained:
+            st.markdown("---")
+            st.markdown("### 📈 Model Performance")
+            if hasattr(st.session_state, 'model_results'):
+                st.metric("Accuracy", f"{st.session_state.model_results['accuracy']:.2%}")
+            
+            st.markdown("---")
+            st.markdown("### 🎯 Prediction Settings")
+            
+            # Confidence threshold
+            if 'confidence_threshold' not in st.session_state:
+                st.session_state.confidence_threshold = 0.5
+            
+            st.session_state.confidence_threshold = st.slider(
+                "Confidence Threshold",
+                min_value=0.0,
+                max_value=1.0,
+                value=0.5,
+                step=0.05
+            )
+            
+            # Batch prediction options
+            st.markdown("### 📄 Batch Processing")
+            uploaded_file = st.file_uploader(
+                "Upload CSV for batch prediction",
+                type=['csv']
+            )
+            
+            if uploaded_file:
+                try:
+                    batch_df = pd.read_csv(uploaded_file)
+                    st.success(f"✅ Loaded {len(batch_df)} records for batch prediction")
+                except Exception as e:
+                    st.error(f"❌ Error loading file: {str(e)}")
+        
+        # Statistics
+        st.markdown("---")
+        st.markdown("### 📊 Statistics")
+        if st.session_state.model_trained and st.session_state.df is not None:
+            st.metric("Total Samples", len(st.session_state.df))
+            st.metric("Unique Classes", len(st.session_state.df['Truth Value'].unique()))
+            st.metric("Predictions Made", len(st.session_state.prediction_history))
+        
+        # Clear history
+        if st.button("🗑️ Clear History", use_container_width=True):
+            st.session_state.prediction_history = []
+            st.rerun()
+    
+    # Main content
+    if st.session_state.df is not None and not st.session_state.df.empty:
+        df = st.session_state.df
+        
+        # Create tabs
+        tab1, tab2, tab3, tab4, tab5 = st.tabs([
+            "📊 Data Explorer",
+            "🎯 Single Prediction",
+            "📈 Model Analysis",
+            "📄 Batch Processing",
+            "📝 History"
+        ])
+        
+        with tab1:
+            st.markdown("### 📊 Data Explorer")
+            
+            # Class distribution
+            fig_dist = create_class_distribution(df)
+            st.plotly_chart(fig_dist, use_container_width=True)
+            
+            # Data preview
+            st.markdown("### 📋 Data Preview")
+            
+            col1, col2 = st.columns([3, 1])
+            with col1:
+                st.dataframe(df.head(100), use_container_width=True)
+            
+            with col2:
+                st.markdown("#### Quick Stats")
+                st.write(f"Total samples: {len(df)}")
+                st.write(f"Classes: {', '.join(df['Truth Value'].unique())}")
+                
+                # Class counts
+                class_counts = df['Truth Value'].value_counts()
+                for class_name, count in class_counts.items():
+                    st.write(f"• {class_name}: {count}")
+            
+            # Random text generator
+            st.markdown("### 🎲 Random Text Generator")
+            selected_class = st.selectbox("Select class for random text", df['Truth Value'].unique())
+            
+            if st.button("🎲 Show Random Text", use_container_width=True):
+                filtered_df = df[df['Truth Value'] == selected_class]
+                if not filtered_df.empty:
+                    random_text = filtered_df.sample(n=1)['Statement'].iloc[0]
+                    st.markdown(f"""
+                    <div class="info-box">
+                        <strong>Random text from '{selected_class}':</strong><br>
+                        {random_text}
+                    </div>
+                    """, unsafe_allow_html=True)
+                else:
+                    st.warning(f"No texts found for class '{selected_class}'")
+        
+        with tab2:
+            st.markdown("### 🎯 Text Classification Prediction")
+            
+            st.markdown("""
+            <div class="info-box">
+                Enter text to classify. The model will predict the most likely class
+                and show confidence scores for all classes.
+            </div>
+            """, unsafe_allow_html=True)
+            
+            # Text input
+            text_input = st.text_area(
+                "Enter text for classification:",
+                placeholder=DEFAULT_TEXT,
+                height=150
+            )
+            
+            col1, col2, col3 = st.columns([1, 2, 1])
+            with col2:
+                if st.button("🔍 Predict", type="primary", use_container_width=True):
+                    if text_input and text_input != DEFAULT_TEXT:
+                        prediction, probabilities = predict_text(text_input)
+                        
+                        if prediction and probabilities:
+                            # Display prediction
+                            confidence = probabilities[prediction]
+                            confidence_color = "#28a745" if confidence >= st.session_state.confidence_threshold else "#ffc107"
+                            
+                            st.markdown(f"""
+                            <div class="prediction-card" style="background: linear-gradient(135deg, #f8f9fa, {confidence_color}22);">
+                                <div style="font-size: 1rem; color: #666;">Predicted Class</div>
+                                <div style="font-size: 2.5rem; color: {confidence_color}; margin: 0.5rem 0;">
+                                    {prediction}
+                                </div>
+                                <div>Confidence: <strong>{confidence:.2%}</strong></div>
+                            </div>
+                            """, unsafe_allow_html=True)
+                            
+                            # Show all class probabilities
+                            st.markdown("#### Class Probabilities")
+                            
+                            prob_df = pd.DataFrame({
+                                'Class': list(probabilities.keys()),
+                                'Probability': list(probabilities.values())
+                            })
+                            
+                            # Create probability bar chart
+                            fig = px.bar(
+                                prob_df,
+                                x='Class',
+                                y='Probability',
+                                color='Class',
+                                title='Prediction Probabilities',
+                                range_y=[0, 1]
+                            )
+                            
+                            # Color based on threshold
+                            fig.update_traces(
+                                marker_color=['#28a745' if p >= st.session_state.confidence_threshold else '#dc3545' 
+                                            for p in prob_df['Probability']]
+                            )
+                            fig.update_layout(showlegend=False, height=300)
+                            st.plotly_chart(fig, use_container_width=True)
+                    else:
+                        st.warning("⚠️ Please enter text to classify")
+        
+        with tab3:
+            st.markdown("### 📈 Model Analysis")
+            
+            if hasattr(st.session_state, 'model_results'):
+                results = st.session_state.model_results
+                
+                col1, col2, col3 = st.columns(3)
+                with col1:
+                    st.metric("Model Accuracy", f"{results['accuracy']:.2%}")
+                with col2:
+                    st.metric("Test Samples", len(results['y_test']))
+                with col3:
+                    st.metric("Classes", len(results['class_names']))
+                
+                # Confusion Matrix
+                st.markdown("#### Confusion Matrix")
+                fig_cm = create_confusion_matrix(
+                    results['y_test'],
+                    results['y_pred'],
+                    results['class_names']
+                )
+                st.plotly_chart(fig_cm, use_container_width=True)
+                
+                # Classification Report
+                st.markdown("#### Classification Report")
+                report = classification_report(
+                    results['y_test'],
+                    results['y_pred'],
+                    target_names=results['class_names'],
+                    output_dict=True
+                )
+                
+                report_df = pd.DataFrame(report).transpose()
+                st.dataframe(report_df.round(4), use_container_width=True)
+                
+                # Feature Importance
+                st.markdown("#### Feature Importance")
+                fig_importance = create_feature_importance(
+                    st.session_state.vectorizer,
+                    st.session_state.classifier
+                )
+                if fig_importance:
+                    st.plotly_chart(fig_importance, use_container_width=True)
+            else:
+                st.info("ℹ️ Train the model first to see analysis")
+        
+        with tab4:
+            st.markdown("### 📄 Batch Processing")
+            
+            uploaded_file = st.file_uploader(
+                "Upload CSV file for batch prediction",
+                type=['csv'],
+                help="CSV file should contain a column named 'text' or 'statement'"
+            )
+            
+            if uploaded_file:
+                try:
+                    batch_df = pd.read_csv(uploaded_file)
+                    
+                    # Find text column
+                    text_col = next((col for col in batch_df.columns if 'text' in col.lower() or 'statement' in col.lower()), batch_df.columns[0])
+                    
+                    st.markdown(f"#### Batch Data Preview (using column: '{text_col}')")
+                    st.dataframe(batch_df.head(), use_container_width=True)
+                    
+                    if st.button("📊 Run Batch Prediction", type="primary"):
+                        with st.spinner("Processing batch predictions..."):
+                            predictions = []
+                            confidences = []
+                            
+                            for text in batch_df[text_col]:
+                                if text and isinstance(text, str):
+                                    pred, probs = predict_text(text)
+                                    if pred:
+                                        predictions.append(pred)
+                                        confidences.append(probs[pred] if probs else 0)
+                                    else:
+                                        predictions.append("Error")
+                                        confidences.append(0)
+                                else:
+                                    predictions.append("Empty")
+                                    confidences.append(0)
+                            
+                            # Add predictions to dataframe
+                            batch_df['prediction'] = predictions
+                            batch_df['confidence'] = confidences
+                            
+                            # Display results
+                            st.markdown("#### Prediction Results")
+                            st.dataframe(batch_df, use_container_width=True)
+                            
+                            # Download results
+                            csv = batch_df.to_csv(index=False)
+                            st.download_button(
+                                label="📥 Download Predictions",
+                                data=csv,
+                                file_name="batch_predictions.csv",
+                                mime="text/csv"
+                            )
+                            
+                            # Summary statistics
+                            st.markdown("#### Summary Statistics")
+                            col1, col2, col3 = st.columns(3)
+                            with col1:
+                                st.metric("Total Processed", len(batch_df))
+                            with col2:
+                                valid_preds = len([p for p in predictions if p != "Error" and p != "Empty"])
+                                st.metric("Valid Predictions", valid_preds)
+                            with col3:
+                                avg_conf = np.mean([c for c in confidences if c > 0])
+                                st.metric("Average Confidence", f"{avg_conf:.2%}" if avg_conf > 0 else "N/A")
+                
+                except Exception as e:
+                    st.error(f"❌ Error processing batch file: {str(e)}")
+        
+        with tab5:
+            st.markdown("### 📝 Prediction History")
+            
+            if st.session_state.prediction_history:
+                history_df = pd.DataFrame(st.session_state.prediction_history)
+                
+                col1, col2 = st.columns(2)
+                with col1:
+                    st.metric("Total Predictions", len(history_df))
+                with col2:
+                    unique_classes = len(history_df['prediction'].unique())
+                    st.metric("Unique Classes Predicted", unique_classes)
+                
+                # Display history
+                st.dataframe(history_df, use_container_width=True)
+                
+                # Prediction distribution
+                fig = create_prediction_metrics()
+                if fig:
+                    st.plotly_chart(fig, use_container_width=True)
+                
+                # Clear history
+                if st.button("🗑️ Clear History", use_container_width=True):
+                    st.session_state.prediction_history = []
+                    st.rerun()
+            else:
+                st.info("ℹ️ No predictions made yet. Start predicting in the 'Single Prediction' tab.")
+    
+    else:
+        # No data loaded
+        st.markdown("""
+        <div class="warning-box">
+            <strong>⚠️ No data loaded</strong><br>
+            Click the "Load & Train Model" button in the sidebar to get started.
+        </div>
+        """, unsafe_allow_html=True)
+        
+        # Show sample of what to expect
+        st.markdown("""
+        ### 🚀 Getting Started
+        
+        1. Click **Load & Train Model** in the sidebar
+        2. Wait for the model to train (this may take a few seconds)
+        3. Start predicting text in the **Single Prediction** tab
+        4. Explore data in the **Data Explorer** tab
+        
+        #### Features:
+        - ✅ Text classification with TF-IDF and Naive Bayes
+        - ✅ Interactive data exploration
+        - ✅ Batch prediction support
+        - ✅ Comprehensive analytics
+        - ✅ Prediction history tracking
+        """)
+    
+    # Footer
+    st.markdown("---")
+    st.markdown("""
+    <div style='text-align: center; color: #666; padding: 1rem;'>
+        <p>📝 Advanced Text Classification App v2.0</p>
+        <p style='font-size: 0.8rem;'>Author: Md Abu Sufian | For educational and research purposes</p>
     </div>
     """, unsafe_allow_html=True)
 
-# Proceed if the dataset was successfully loaded
-if not df.empty:
-    st.write("Data Preview:")
-    st.dataframe(df.head())
-
-    # Preprocess the dataset and train the model
-    X = df['Statement']
-    y = df['Truth Value']
-    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
-    tfidf_vectorizer = TfidfVectorizer(max_features=5000)
-    X_train_tfidf = tfidf_vectorizer.fit_transform(X_train)
-    X_test_tfidf = tfidf_vectorizer.transform(X_test)
-    classifier = MultinomialNB()
-    classifier.fit(X_train_tfidf, y_train)
-    
-    # Display model accuracy
-    y_pred = classifier.predict(X_test_tfidf)
-    accuracy = accuracy_score(y_test, y_pred)
-    st.write(f"Model Accuracy: {accuracy:.2f}")
-    st.write("Classification Report:")
-    st.write(classification_report(y_test, y_pred))
-
-    # Section for Class Selection and Random Texts
-    st.title("Class Selection and Random Texts")
-    selected_class = st.selectbox("Select a class to see a random text", df['Truth Value'].unique())
-
-    if st.button("Show Random Text"):
-        filtered_df = df[df['Truth Value'] == selected_class]
-        if not filtered_df.empty:
-            random_text = filtered_df.sample(n=1)['Statement'].iloc[0]
-            st.write(f"Random text from '{selected_class}': {random_text}")
-        else:
-            st.write(f"No texts found for the selected class '{selected_class}'.")
-
-    # User input for prediction
-    st.subheader("Text Classification Prediction")
-    text_input = st.text_input("Enter text for classification prediction:")
-    if text_input:
-        text_input_tfidf = tfidf_vectorizer.transform([text_input])
-        prediction = classifier.predict(text_input_tfidf)
-        st.write("Prediction Result:")
-        st.success(f"The predicted class for the entered text is: {prediction[0]}")
-else:
-    st.error("Failed to load or display data. Please check the dataset URL or format.")
-
+if __name__ == "__main__":
+    main()
