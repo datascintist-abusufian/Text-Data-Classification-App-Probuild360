@@ -9,11 +9,6 @@ from sklearn.preprocessing import LabelEncoder
 from sklearn.manifold import TSNE
 import re
 import nltk
-from nltk.corpus import stopwords
-from nltk.stem import WordNetLemmatizer
-import plotly.express as px
-import plotly.graph_objects as go
-from plotly.subplots import make_subplots
 import warnings
 import base64
 import os
@@ -27,7 +22,16 @@ try:
     WORDCLOUD_AVAILABLE = True
 except ImportError:
     WORDCLOUD_AVAILABLE = False
-    st.warning("⚠️ WordCloud library not available. Some visualizations will be limited.")
+
+# ============================================================================
+# PAGE CONFIGURATION - MUST BE FIRST
+# ============================================================================
+st.set_page_config(
+    page_title="Advanced Text Classification App",
+    page_icon="📝",
+    layout="wide",
+    initial_sidebar_state="expanded"
+)
 
 # ============================================================================
 # NLTK DATA DOWNLOAD WITH ERROR HANDLING
@@ -36,24 +40,38 @@ except ImportError:
 def download_nltk_data():
     """Download required NLTK data with proper error handling"""
     try:
-        nltk_resources = ['punkt', 'stopwords', 'wordnet', 'omw-1.4', 'punkt_tab']
+        # Try to download each resource with error handling
+        resources = ['punkt', 'stopwords', 'wordnet', 'omw-1.4']
         
-        for resource in nltk_resources:
+        for resource in resources:
             try:
-                nltk.data.find(f'tokenizers/{resource}')
-            except LookupError:
-                try:
-                    nltk.download(resource, quiet=True)
-                except:
-                    pass
+                nltk.download(resource, quiet=True)
+            except:
+                pass
         
-        return True
+        # Try to find the data to verify
+        try:
+            from nltk.corpus import stopwords
+            stopwords.words('english')
+            return True
+        except:
+            return False
+            
     except Exception as e:
-        st.warning(f"⚠️ NLTK download warning: {str(e)}")
         return False
 
 # Download NLTK data
 nltk_available = download_nltk_data()
+
+# Set up stopwords and lemmatizer if available
+if nltk_available:
+    try:
+        from nltk.corpus import stopwords
+        from nltk.stem import WordNetLemmatizer
+        STOP_WORDS = set(stopwords.words('english'))
+        LEMMATIZER = WordNetLemmatizer()
+    except:
+        nltk_available = False
 
 # ============================================================================
 # TEXT PREPROCESSING FUNCTIONS
@@ -64,24 +82,30 @@ def preprocess_text(text):
         return ""
     
     try:
+        # Basic cleaning
         text = text.lower()
         text = re.sub(r'[^a-zA-Z\s]', '', text)
         text = ' '.join(text.split())
         
+        # Advanced preprocessing if NLTK is available
         if nltk_available:
             try:
-                tokens = nltk.word_tokenize(text)
-                stop_words = set(stopwords.words('english'))
-                tokens = [token for token in tokens if token not in stop_words]
-                lemmatizer = WordNetLemmatizer()
-                tokens = [lemmatizer.lemmatize(token) for token in tokens]
+                # Simple tokenization without using punkt_tab
+                tokens = text.split()
+                
+                # Remove stopwords
+                tokens = [token for token in tokens if token not in STOP_WORDS]
+                
+                # Lemmatize
+                tokens = [LEMMATIZER.lemmatize(token) for token in tokens]
+                
                 return ' '.join(tokens)
-            except:
+            except Exception as e:
                 return text
         else:
             return text
             
-    except Exception as e:
+    except Exception:
         return text
 
 def clean_text(text):
@@ -92,16 +116,6 @@ def clean_text(text):
     text = re.sub(r'[^a-zA-Z\s]', '', text)
     text = ' '.join(text.split())
     return text
-
-# ============================================================================
-# PAGE CONFIGURATION
-# ============================================================================
-st.set_page_config(
-    page_title="Advanced Text Classification App",
-    page_icon="📝",
-    layout="wide",
-    initial_sidebar_state="expanded"
-)
 
 # ============================================================================
 # CUSTOM CSS
@@ -191,6 +205,8 @@ def initialize_session_state():
         st.session_state.model_results = None
     if 'confidence_threshold' not in st.session_state:
         st.session_state.confidence_threshold = 0.5
+    if 'nltk_available' not in st.session_state:
+        st.session_state.nltk_available = nltk_available
 
 initialize_session_state()
 
@@ -466,7 +482,6 @@ def create_text_length_distribution(df):
     try:
         df['text_length'] = df['Statement'].apply(len)
         
-        # Create separate charts
         fig_hist = px.histogram(
             df,
             x='text_length',
@@ -685,6 +700,10 @@ def main():
     with st.sidebar:
         st.title("🎛️ Control Panel")
         
+        # Show NLTK status
+        if not st.session_state.nltk_available:
+            st.warning("⚠️ NLTK not fully available. Using basic text processing.")
+        
         # Model Training Section
         st.markdown("### 📊 Data Loading")
         if st.button("🔄 Load & Train Model", use_container_width=True):
@@ -759,13 +778,11 @@ def main():
             if WORDCLOUD_AVAILABLE:
                 st.markdown("### ☁️ Word Clouds")
                 
-                # Overall word cloud
                 fig_wc = create_word_cloud(df)
                 if fig_wc:
                     st.pyplot(fig_wc)
                     plt.close()
                 
-                # Word clouds per class
                 st.markdown("#### Word Clouds by Class")
                 cols = st.columns(min(3, len(df['Truth Value'].unique())))
                 for idx, class_name in enumerate(df['Truth Value'].unique()[:3]):
@@ -1011,7 +1028,6 @@ def main():
                 
                 st.dataframe(history_df, use_container_width=True)
                 
-                # Prediction distribution
                 fig = create_prediction_metrics()
                 if fig:
                     st.plotly_chart(fig, use_container_width=True)
@@ -1026,7 +1042,6 @@ def main():
             st.markdown("### 🔬 Advanced Analytics")
             
             if st.session_state.model_trained:
-                # t-SNE Visualization
                 st.markdown("#### 🎯 t-SNE Visualization")
                 fig_tsne = create_tsne_visualization(st.session_state.model_results)
                 if fig_tsne:
@@ -1034,11 +1049,9 @@ def main():
                 else:
                     st.info("t-SNE visualization not available")
                 
-                # Text Statistics
                 st.markdown("#### 📊 Text Statistics")
                 
                 col1, col2, col3 = st.columns(3)
-                
                 char_counts = df['Statement'].apply(len)
                 with col1:
                     st.metric("Average Length", f"{char_counts.mean():.1f} chars")
@@ -1047,12 +1060,10 @@ def main():
                 with col3:
                     st.metric("Max Length", f"{char_counts.max():.0f} chars")
                 
-                # Vocabulary analysis
                 all_words = ' '.join(df['Statement']).split()
                 vocab_size = len(set(all_words))
                 st.metric("Vocabulary Size", vocab_size)
                 
-                # Common words
                 st.markdown("#### 🔤 Most Common Words")
                 word_counts = Counter(all_words)
                 common_words = pd.DataFrame(word_counts.most_common(20), columns=['Word', 'Count'])
@@ -1067,7 +1078,6 @@ def main():
                 )
                 st.plotly_chart(fig, use_container_width=True)
                 
-                # Class-specific statistics
                 st.markdown("#### 📈 Class-Specific Statistics")
                 
                 class_stats = []
@@ -1086,7 +1096,6 @@ def main():
                 stats_df = pd.DataFrame(class_stats)
                 st.dataframe(stats_df.round(2), use_container_width=True)
                 
-                # Co-occurrence analysis
                 st.markdown("#### 🔗 Word Co-occurrence")
                 
                 top_words = [word for word, _ in word_counts.most_common(10)]
